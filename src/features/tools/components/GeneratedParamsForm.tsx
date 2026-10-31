@@ -1,3 +1,10 @@
+import {
+  Checkbox,
+  FormField,
+  Input,
+  Select,
+} from '../../../shared/ui';
+
 interface SchemaProperty {
   readonly type?: string;
   readonly description?: string;
@@ -31,9 +38,8 @@ export function GeneratedParamsForm({
 
   if (keys.length === 0) {
     return (
-      <p className="text-xs text-slate-500 dark:text-slate-400">
-        Define <code className="font-mono">properties</code> in{' '}
-        <code className="font-mono">schema_json</code> to generate typed input fields automatically.
+      <p className="text-[12px] text-secondary">
+        Add <code className="font-mono">properties</code> in the JSON schema to generate input fields automatically.
       </p>
     );
   }
@@ -51,17 +57,17 @@ export function GeneratedParamsForm({
         const currentVal = values[key];
 
         return (
-          <div key={key} className="space-y-1">
-            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
-              <span className="font-mono">{key}</span>
-              {isReq ? ' *' : ''}{' '}
-              <span className="text-slate-400">({type})</span>
-            </label>
+          <FormField
+            key={key}
+            label={key}
+            required={isReq}
+            rightLabel={<span className="font-mono">{type}</span>}
+          >
             {prop.enum && prop.enum.length > 0 ? (
-              <select
+              <Select
+                mono
                 value={String(currentVal ?? '')}
                 onChange={(e) => updateKey(key, e.target.value)}
-                className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-1.5 text-xs font-mono"
               >
                 <option value="">Select...</option>
                 {prop.enum.map((opt) => (
@@ -69,20 +75,19 @@ export function GeneratedParamsForm({
                     {opt}
                   </option>
                 ))}
-              </select>
+              </Select>
             ) : type === 'boolean' ? (
-              <label className="inline-flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300 pt-1">
-                <input
-                  type="checkbox"
+              <div className="pt-1">
+                <Checkbox
                   checked={Boolean(currentVal)}
-                  onChange={(e) => updateKey(key, e.target.checked)}
-                  className="rounded border-slate-300 dark:border-slate-700"
+                  onChange={(checked) => updateKey(key, checked)}
+                  label={prop.description || 'Enabled'}
                 />
-                {prop.description || 'Enabled'}
-              </label>
+              </div>
             ) : type === 'number' || type === 'integer' ? (
-              <input
+              <Input
                 type="number"
+                mono
                 value={currentVal !== undefined ? String(currentVal) : ''}
                 onChange={(e) =>
                   updateKey(
@@ -91,18 +96,17 @@ export function GeneratedParamsForm({
                   )
                 }
                 placeholder={prop.description ?? key}
-                className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-1.5 text-xs font-mono"
               />
             ) : (
-              <input
+              <Input
                 type="text"
+                mono
                 value={currentVal !== undefined ? String(currentVal) : ''}
                 onChange={(e) => updateKey(key, e.target.value)}
                 placeholder={prop.description ?? key}
-                className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-1.5 text-xs font-mono"
               />
             )}
-          </div>
+          </FormField>
         );
       })}
     </div>

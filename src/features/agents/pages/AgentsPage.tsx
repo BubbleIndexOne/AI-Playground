@@ -1,10 +1,33 @@
+import {
+  Bot,
+  Copy,
+  Download,
+  Edit3,
+  MessageSquare,
+  MoreHorizontal,
+  Plus,
+  Trash2,
+  Upload,
+} from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
-import { EmptyState } from '../../../shared/components/EmptyState';
 import { ErrorBanner } from '../../../shared/components/ErrorBanner';
-import { formatDateTime } from '../../../shared/utils/formatters';
+import {
+  Badge,
+  Button,
+  Card,
+  CardGridSkeleton,
+  ConfirmDialog,
+  Dialog,
+  DropdownMenu,
+  EmptyState,
+  IconButton,
+  PageHeader,
+  Textarea,
+  toast,
+} from '../../../shared/ui';
 import { AgentRecord } from '../../../storage/interfaces/AgentRepository';
+import { useModelPresetsQuery } from '../../presets/hooks/useModelPresets';
 import { AgentFormModal } from '../components/AgentFormModal';
 import { useAgentMutations, useAgentsQuery } from '../hooks/useAgents';
 import { agentsService } from '../services/agents.service';
@@ -12,7 +35,9 @@ import { agentsService } from '../services/agents.service';
 export function AgentsPage() {
   const navigate = useNavigate();
   const { data: agents, isLoading, error } = useAgentsQuery();
-  const { deleteAgentMutation, importAgentsMutation } = useAgentMutations();
+  const { data: presets } = useModelPresetsQuery();
+  const { saveAgentMutation, deleteAgentMutation, importAgentsMutation } =
+    useAgentMutations();
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingAgent, setEditingAgent] = useState<AgentRecord | null>(null);
@@ -20,144 +45,213 @@ export function AgentsPage() {
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [importJsonText, setImportJsonText] = useState('');
 
-  const handleExportJson = async () => {
-    const json = await agentsService.exportAll();
+  const presetNameById = new Map((presets ?? []).map((p) => [p.id, p.name]));
+
+  const downloadJson = (json: string, filename: string) => {
     const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'agents-export.json';
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
   };
 
+  const handleExportAll = async () => {
+    const json = await agentsService.exportAll();
+    downloadJson(json, 'agents.json');
+    toast.success('Exported all agents');
+  };
+
+  const handleExportSingle = (agent: AgentRecord) => {
+    downloadJson(
+      JSON.stringify(agent, null, 2),
+      `${agent.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.json`
+    );
+    toast.success(`Exported "${agent.name}"`);
+  };
+
+  const handleDuplicate = async (agent: AgentRecord) => {
+    await saveAgentMutation.mutateAsync({
+      name: `${agent.name} (Copy)`,
+      description: agent.description,
+      systemPrompt: agent.systemPrompt,
+      modelPresetId: agent.modelPresetId,
+      credentialId: agent.credentialId,
+      attachedTools: agent.attachedTools,
+      attachedConnectors: agent.attachedConnectors,
+    });
+    toast.success(`Duplicated "${agent.name}"`);
+  };
+
   const handleImportJson = async () => {
     if (!importJsonText.trim()) return;
-    await importAgentsMutation.mutateAsync(importJsonText);
-    setImportJsonText('');
-    setImportModalOpen(false);
+    try {
+      const imported = await importAgentsMutation.mutateAsync(importJsonText);
+      toast.success(`Imported ${imported.length} agent(s)`);
+      setImportJsonText('');
+      setImportModalOpen(false);
+    } catch (err) {
+      toast.error(
+        'Import failed',
+        err instanceof Error ? err.message : undefined
+      );
+    }
   };
 
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
     await deleteAgentMutation.mutateAsync(deleteTarget.id);
+    toast.success(`Deleted "${deleteTarget.name}"`);
     setDeleteTarget(null);
   };
 
-  return (
-    <div className="max-w-5xl mx-auto space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-            AI Agents
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Stored locally behind AgentRepository. Combine a system prompt, model preset, BYOK credential, tools, and connectors.
-          </p>
-        </div>
+  const hasAgents = Boolean(agents && agents.length > 0);
 
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleExportJson}
-            className="px-3.5 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
-          >
-            Export JSON
-          </button>
-          <button
-            type="button"
-            onClick={() => setImportModalOpen(true)}
-            className="px-3.5 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
-          >
-            Import JSON
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setEditingAgent(null);
-              setFormOpen(true);
-            }}
-            className="px-4 py-2 text-xs font-medium text-white bg-slate-900 dark:bg-slate-100 dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-200 rounded-lg"
-          >
-            New Agent
-          </button>
-        </div>
-      </div>
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="Agents"
+        description="Combine a system prompt, model preset, tools, and connectors. Agents are saved in this browser."
+        actions={
+          <>
+            <DropdownMenu
+              items={[
+                {
+                  label: 'Import JSON',
+                  icon: <Upload size={14} />,
+                  onClick: () => setImportModalOpen(true),
+                },
+                {
+                  label: 'Export all JSON',
+                  icon: <Download size={14} />,
+                  disabled: !hasAgents,
+                  onClick: handleExportAll,
+                },
+              ]}
+              trigger={
+                <Button variant="secondary" size="md">
+                  Import / Export
+                </Button>
+              }
+            />
+            {hasAgents && (
+              <Button
+                variant="primary"
+                size="md"
+                icon={<Plus size={16} />}
+                onClick={() => {
+                  setEditingAgent(null);
+                  setFormOpen(true);
+                }}
+              >
+                New agent
+              </Button>
+            )}
+          </>
+        }
+      />
 
       {error && <ErrorBanner error={error} />}
 
       {isLoading ? (
-        <div className="p-6 text-sm text-slate-500">Loading agents...</div>
-      ) : !agents || agents.length === 0 ? (
+        <CardGridSkeleton count={4} />
+      ) : !hasAgents ? (
         <EmptyState
-          title="No agents created yet"
-          description="Build an agent from a system prompt, model preset, BYOK API key, and tools."
-          actionLabel="Create First Agent"
+          icon={<Bot size={20} />}
+          title="No agents yet"
+          description="Create an agent with custom instructions, a model preset, and tools to start chatting."
+          actionLabel="Create agent"
           onAction={() => {
             setEditingAgent(null);
             setFormOpen(true);
           }}
         />
       ) : (
-        <div className="space-y-4">
-          {agents.map((agent) => (
-            <div
-              key={agent.id}
-              className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 flex flex-wrap items-start justify-between gap-4"
-            >
-              <div className="space-y-1.5 max-w-2xl">
-                <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-                  {agent.name}
-                </h3>
-                {agent.description && (
-                  <p className="text-xs text-slate-600 dark:text-slate-300">
-                    {agent.description}
-                  </p>
-                )}
-                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                  <span>Tools: {agent.attachedTools.length}</span>
-                  <span aria-hidden="true">·</span>
-                  <span>
-                    Connectors:{' '}
-                    {agent.attachedConnectors.length
-                      ? agent.attachedConnectors.join(', ')
-                      : 'none'}
-                  </span>
-                  <span aria-hidden="true">·</span>
-                  <span className="tabular-nums">
-                    Updated {formatDateTime(agent.updatedAt)}
-                  </span>
-                </div>
-              </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {agents!.map((agent) => {
+            const presetName =
+              presetNameById.get(agent.modelPresetId) ?? 'Default model';
+            return (
+              <Card
+                key={agent.id}
+                interactive
+                padding="md"
+                className="flex flex-col justify-between gap-4"
+              >
+                <div className="space-y-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <h2 className="text-[16px] font-semibold text-primary truncate">
+                      {agent.name}
+                    </h2>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        icon={<MessageSquare size={14} />}
+                        onClick={() => navigate(`/chat?agentId=${agent.id}`)}
+                      >
+                        Chat
+                      </Button>
+                      <DropdownMenu
+                        items={[
+                          {
+                            label: 'Edit',
+                            icon: <Edit3 size={14} />,
+                            onClick: () => {
+                              setEditingAgent(agent);
+                              setFormOpen(true);
+                            },
+                          },
+                          {
+                            label: 'Duplicate',
+                            icon: <Copy size={14} />,
+                            onClick: () => handleDuplicate(agent),
+                          },
+                          {
+                            label: 'Export JSON',
+                            icon: <Download size={14} />,
+                            onClick: () => handleExportSingle(agent),
+                          },
+                          {
+                            label: 'Delete',
+                            icon: <Trash2 size={14} />,
+                            danger: true,
+                            onClick: () => setDeleteTarget(agent),
+                          },
+                        ]}
+                        trigger={
+                          <IconButton
+                            aria-label={`More actions for ${agent.name}`}
+                            icon={<MoreHorizontal size={16} />}
+                            size="sm"
+                          />
+                        }
+                      />
+                    </div>
+                  </div>
 
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => navigate(`/chat?agentId=${agent.id}`)}
-                  className="px-3.5 py-1.5 text-xs font-medium text-white bg-slate-900 dark:bg-slate-100 dark:text-slate-900 rounded-lg"
-                >
-                  Chat with Agent
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingAgent(agent);
-                    setFormOpen(true);
-                  }}
-                  className="px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 rounded-lg"
-                >
-                  Edit
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDeleteTarget(agent)}
-                  className="px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          ))}
+                  <p className="text-[13px] text-secondary line-clamp-2 min-h-[2.5rem]">
+                    {agent.description || 'No description provided.'}
+                  </p>
+                </div>
+
+                <div className="pt-3 border-t border-subtle flex flex-wrap items-center gap-2">
+                  <Badge variant="neutral">{presetName}</Badge>
+                  <Badge variant="neutral" mono>
+                    {agent.attachedTools.length}{' '}
+                    {agent.attachedTools.length === 1 ? 'tool' : 'tools'}
+                  </Badge>
+                  <Badge variant="neutral" mono>
+                    {agent.attachedConnectors.length}{' '}
+                    {agent.attachedConnectors.length === 1
+                      ? 'connector'
+                      : 'connectors'}
+                  </Badge>
+                </div>
+              </Card>
+            );
+          })}
         </div>
       )}
 
@@ -167,47 +261,47 @@ export function AgentsPage() {
         onClose={() => setFormOpen(false)}
       />
 
-      {importModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-xs p-4">
-          <div className="w-full max-w-lg rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-lg space-y-4">
-            <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-              Import Agents from JSON
-            </h3>
-            {importAgentsMutation.error && (
-              <ErrorBanner error={importAgentsMutation.error} />
-            )}
-            <textarea
-              rows={8}
-              value={importJsonText}
-              onChange={(e) => setImportJsonText(e.target.value)}
-              placeholder="Paste exported agent JSON array or object..."
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 p-3 text-xs font-mono"
-            />
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setImportModalOpen(false)}
-                className="px-4 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 rounded-lg"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleImportJson}
-                className="px-4 py-2 text-xs font-medium text-white bg-slate-900 dark:bg-slate-100 dark:text-slate-900 rounded-lg"
-              >
-                Import
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Dialog
+        open={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        title="Import agents from JSON"
+        description="Paste an exported agent JSON object or array."
+        maxWidth="lg"
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setImportModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              loading={importAgentsMutation.isPending}
+              onClick={handleImportJson}
+            >
+              Import agents
+            </Button>
+          </>
+        }
+      >
+        {importAgentsMutation.error && (
+          <ErrorBanner error={importAgentsMutation.error} />
+        )}
+        <Textarea
+          mono
+          rows={8}
+          value={importJsonText}
+          onChange={(e) => setImportJsonText(e.target.value)}
+          placeholder='[{"name": "Research Agent", "systemPrompt": "..."}]'
+        />
+      </Dialog>
 
       <ConfirmDialog
         open={deleteTarget !== null}
-        title={`Delete agent "${deleteTarget?.name ?? ''}"?`}
-        description="Removes this agent from local storage."
-        confirmLabel="Delete Agent"
+        title={`Delete "${deleteTarget?.name ?? ''}"?`}
+        description="This agent will be removed from this browser."
+        confirmLabel="Delete agent"
         isDestructive
         isPending={deleteAgentMutation.isPending}
         onConfirm={handleConfirmDelete}

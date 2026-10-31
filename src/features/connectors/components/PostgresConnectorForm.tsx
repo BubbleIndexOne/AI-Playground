@@ -5,13 +5,26 @@ import {
 } from '../../../api/types/connectors.types';
 import { ConnectorType } from '../../../domain/enums';
 import { ErrorBanner } from '../../../shared/components/ErrorBanner';
+import {
+  Button,
+  Checkbox,
+  CodeBlock,
+  FormField,
+  Input,
+  Switch,
+  toast,
+} from '../../../shared/ui';
 import { useConnectorMutations } from '../hooks/useConnectors';
 
 interface PostgresConnectorFormProps {
   readonly isConfigured: boolean;
+  readonly onSaved?: () => void;
 }
 
-export function PostgresConnectorForm({ isConfigured }: PostgresConnectorFormProps) {
+export function PostgresConnectorForm({
+  isConfigured,
+  onSaved,
+}: PostgresConnectorFormProps) {
   const { saveMutation, testMutation } = useConnectorMutations();
 
   const [host, setHost] = useState('');
@@ -23,7 +36,6 @@ export function PostgresConnectorForm({ isConfigured }: PostgresConnectorFormPro
   const [verifyBeforeSave, setVerifyBeforeSave] = useState(true);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<ConnectorTestResponse | null>(null);
-  const [savedNotice, setSavedNotice] = useState(false);
 
   const clearForm = () => {
     setHost('');
@@ -37,7 +49,6 @@ export function PostgresConnectorForm({ isConfigured }: PostgresConnectorFormPro
   const handleSave = async (e: FormEvent) => {
     e.preventDefault();
     setValidationError(null);
-    setSavedNotice(false);
 
     const parsed = PostgresCredentialsSchema.safeParse({
       host: host.trim(),
@@ -58,9 +69,9 @@ export function PostgresConnectorForm({ isConfigured }: PostgresConnectorFormPro
       credentials: parsed.data,
       verify: verifyBeforeSave,
     });
-    // Never display stored secrets; after saving, clear the form.
     clearForm();
-    setSavedNotice(true);
+    toast.success('Postgres configured', 'Credentials were saved and cleared from the form.');
+    onSaved?.();
   };
 
   const handleTestForm = async () => {
@@ -95,155 +106,122 @@ export function PostgresConnectorForm({ isConfigured }: PostgresConnectorFormPro
   };
 
   return (
-    <form
-      onSubmit={handleSave}
-      className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 space-y-4"
-    >
-      <div className="flex items-center justify-between gap-4">
-        <div className="space-y-0.5">
-          <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-            PostgreSQL Credentials
-          </h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            PUT /connectors/postgres · Form clears automatically after saving.
-          </p>
-        </div>
-        {isConfigured && (
-          <button
-            type="button"
-            onClick={handleTestStored}
-            disabled={testMutation.isPending}
-            className="px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors whitespace-nowrap shrink-0"
-          >
-            Test Stored Credentials
-          </button>
-        )}
-      </div>
-
+    <form onSubmit={handleSave} className="space-y-4">
       {validationError && <ErrorBanner error={new Error(validationError)} />}
       {saveMutation.error && <ErrorBanner error={saveMutation.error} title="Save failed" />}
       {testMutation.error && <ErrorBanner error={testMutation.error} title="Test failed" />}
 
       {testResult && (
-        <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-3 text-xs font-mono overflow-x-auto">
-          {JSON.stringify(testResult, null, 2)}
+        <div className="space-y-1.5">
+          <span className="text-[12px] font-medium text-secondary">
+            Connection test result
+          </span>
+          <CodeBlock code={JSON.stringify(testResult, null, 2)} maxHeight="160px" />
         </div>
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="sm:col-span-2 space-y-1.5">
-          <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
-            Host *
-          </label>
-          <input
-            type="text"
-            required
-            value={host}
-            onChange={(e) => setHost(e.target.value)}
-            placeholder="db.example.com"
-            className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm text-slate-900 dark:text-slate-100"
-          />
+        <div className="sm:col-span-2">
+          <FormField label="Host" htmlFor="pg-host" required>
+            <Input
+              id="pg-host"
+              type="text"
+              required
+              value={host}
+              onChange={(e) => setHost(e.target.value)}
+              placeholder="db.example.com"
+            />
+          </FormField>
         </div>
-        <div className="space-y-1.5">
-          <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
-            Port *
-          </label>
-          <input
+        <FormField label="Port" htmlFor="pg-port" required>
+          <Input
+            id="pg-port"
             type="number"
             required
             value={port}
             onChange={(e) => setPort(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm font-mono text-slate-900 dark:text-slate-100"
+            mono
           />
-        </div>
+        </FormField>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="space-y-1.5">
-          <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
-            Database *
-          </label>
-          <input
+        <FormField label="Database" htmlFor="pg-db" required>
+          <Input
+            id="pg-db"
             type="text"
             required
             value={database}
             onChange={(e) => setDatabase(e.target.value)}
             placeholder="production"
-            className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm text-slate-900 dark:text-slate-100"
           />
-        </div>
-        <div className="space-y-1.5">
-          <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
-            User *
-          </label>
-          <input
+        </FormField>
+        <FormField label="User" htmlFor="pg-user" required>
+          <Input
+            id="pg-user"
             type="text"
             required
             value={user}
             onChange={(e) => setUser(e.target.value)}
             placeholder="postgres"
-            className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm text-slate-900 dark:text-slate-100"
           />
-        </div>
-        <div className="space-y-1.5">
-          <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
-            Password *
-          </label>
-          <input
+        </FormField>
+        <FormField label="Password" htmlFor="pg-pass" required>
+          <Input
+            id="pg-pass"
             type="password"
             required
             autoComplete="off"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="••••••••"
-            className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm text-slate-900 dark:text-slate-100"
           />
-        </div>
+        </FormField>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
-        <div className="flex items-center gap-6">
-          <label className="inline-flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={ssl}
-              onChange={(e) => setSsl(e.target.checked)}
-              className="rounded border-slate-300 dark:border-slate-700"
-            />
-            Require SSL
-          </label>
-          <label className="inline-flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={verifyBeforeSave}
-              onChange={(e) => setVerifyBeforeSave(e.target.checked)}
-              className="rounded border-slate-300 dark:border-slate-700"
-            />
-            Verify before saving
-          </label>
-          {savedNotice && (
-            <span className="text-xs text-emerald-600 dark:text-emerald-400">
-              Saved and cleared.
-            </span>
-          )}
+      <div className="flex flex-wrap items-center justify-between gap-4 pt-2 border-t border-subtle">
+        <div className="flex flex-wrap items-center gap-6">
+          <Checkbox
+            checked={ssl}
+            onChange={setSsl}
+            label="Require SSL"
+          />
+          <Switch
+            checked={verifyBeforeSave}
+            onChange={setVerifyBeforeSave}
+            label="Verify before saving"
+          />
         </div>
 
         <div className="flex items-center gap-2">
-          <button
+          {isConfigured && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={handleTestStored}
+              loading={testMutation.isPending}
+            >
+              Test stored
+            </Button>
+          )}
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
             onClick={handleTestForm}
-            disabled={testMutation.isPending}
-            className="px-3.5 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors whitespace-nowrap shrink-0"
+            loading={testMutation.isPending}
           >
-            Test Form Values
-          </button>
-          <button
+            Test connection
+          </Button>
+          <Button
             type="submit"
-            disabled={saveMutation.isPending}
-            className="px-4 py-2 text-xs font-medium text-white bg-slate-900 dark:bg-slate-100 dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-200 rounded-lg transition-colors whitespace-nowrap shrink-0"
+            variant="primary"
+            size="sm"
+            loading={saveMutation.isPending}
           >
-            {saveMutation.isPending ? 'Saving...' : 'Save Postgres'}
-          </button>
+            Save credentials
+          </Button>
         </div>
       </div>
     </form>

@@ -1,9 +1,17 @@
-import { FormEvent, useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Bot, CornerDownLeft, Square } from 'lucide-react';
+import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AIProvider } from '../../../domain/providers';
-import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
-import { EmptyState } from '../../../shared/components/EmptyState';
 import { ErrorBanner } from '../../../shared/components/ErrorBanner';
+import {
+  Badge,
+  Button,
+  ConfirmDialog,
+  EmptyState,
+  Select,
+  Textarea,
+  toast,
+} from '../../../shared/ui';
 import {
   ChatMessageRecord,
   ChatSessionRecord,
@@ -13,6 +21,7 @@ import { useCredentialsQuery } from '../../credentials/hooks/useCredentials';
 import { useModelPresetsQuery } from '../../presets/hooks/useModelPresets';
 import { ChatSidebar } from '../components/ChatSidebar';
 import { ChatToolCallCard } from '../components/ChatToolCallCard';
+import { MarkdownRenderer } from '../components/MarkdownRenderer';
 import {
   useAgentChatsQuery,
   useChatMutations,
@@ -21,6 +30,7 @@ import {
 import { chatService } from '../services/chat.service';
 
 export function ChatPage() {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const initialAgentParam = searchParams.get('agentId');
 
@@ -41,6 +51,8 @@ export function ChatPage() {
   const [deleteTarget, setDeleteTarget] = useState<ChatSessionRecord | null>(
     null
   );
+
+  const stopRequestedRef = useRef(false);
 
   useEffect(() => {
     if (!selectedAgentId && agents && agents.length > 0) {
@@ -78,10 +90,10 @@ export function ChatPage() {
     setSelectedChatId(created.id);
   };
 
-  const handleSendMessage = async (e: FormEvent) => {
-    e.preventDefault();
+  const submitMessage = async () => {
     if (!selectedAgent || !promptInput.trim() || isStreaming) return;
     setRuntimeError(null);
+    stopRequestedRef.current = false;
 
     const credential = credentials?.find(
       (c) => c.id === selectedAgent.credentialId
@@ -89,7 +101,7 @@ export function ChatPage() {
     if (!credential) {
       setRuntimeError(
         new Error(
-          'This agent does not have a valid BYOK API Key assigned. Configure one in API Keys and attach it in Agents.'
+          'Select an API key for this agent in the Agents page before sending messages.'
         )
       );
       return;
@@ -107,7 +119,7 @@ export function ChatPage() {
     let chatSession = activeChat;
     if (!chatSession) {
       chatSession = await createChatMutation.mutateAsync(
-        promptInput.trim().slice(0, 40)
+        promptInput.trim().slice(0, 42)
       );
       setSelectedChatId(chatSession.id);
     }
@@ -139,7 +151,11 @@ export function ChatPage() {
         resolvedTools: resolvedTools ?? [],
         history: nextHistory,
         maxIterations,
-        onPartialUpdate: (draft) => setStreamingDraft(draft),
+        onPartialUpdate: (draft) => {
+          if (!stopRequestedRef.current) {
+            setStreamingDraft(draft);
+          }
+        },
       });
 
       await saveMessagesMutation.mutateAsync({
@@ -154,24 +170,36 @@ export function ChatPage() {
     }
   };
 
+  const handleFormSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    submitMessage();
+  };
+
+  const handleComposerKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      submitMessage();
+    }
+  };
+
   if (!agents || agents.length === 0) {
     return (
-      <div className="max-w-4xl mx-auto">
-        <EmptyState
-          title="No agents configured"
-          description="Create an agent with a prompt, model preset, BYOK API key, and tools before starting a chat."
-        />
-        <div className="text-center mt-4">
-          <Link
-            to="/agents"
-            className="text-xs font-medium text-slate-900 dark:text-slate-100 underline"
-          >
-            Go to Agents
-          </Link>
-        </div>
-      </div>
+      <EmptyState
+        icon={<Bot size={20} />}
+        title="No agents available"
+        description="Create an agent with a system prompt, model preset, and API key before starting a conversation."
+        actionLabel="Create agent"
+        onAction={() => navigate('/agents')}
+      />
     );
   }
+
+  const activePreset = presets?.find(
+    (p) => p.id === selectedAgent?.modelPresetId
+  );
+  const activeCredential = credentials?.find(
+    (c) => c.id === selectedAgent?.credentialId
+  );
 
   const displayedMessages = [
     ...(activeChat?.messages ?? []),
@@ -179,7 +207,7 @@ export function ChatPage() {
   ];
 
   return (
-    <div className="max-w-6xl mx-auto flex flex-col md:flex-row gap-6">
+    <div className="flex flex-col md:flex-row gap-5 h-[calc(100vh-5rem)] min-h-[540px]">
       <ChatSidebar
         agents={agents}
         selectedAgentId={selectedAgentId}
@@ -191,132 +219,182 @@ export function ChatPage() {
         selectedChatId={selectedChatId}
         onSelectChat={setSelectedChatId}
         onCreateChat={handleCreateChat}
-        onRenameChat={(chatId, title) =>
-          renameChatMutation.mutate({ chatId, title })
-        }
+        onRenameChat={(chatId, title) => {
+          renameChatMutation.mutate({ chatId, title });
+          toast.success('Conversation renamed');
+        }}
         onRequestDeleteChat={setDeleteTarget}
       />
 
-      <div className="flex-1 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col min-h-[560px]">
-        {selectedAgent && (
-          <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-4">
-            <div className="space-y-1">
-              <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                {selectedAgent.name}
-              </h2>
-              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                {(resolvedTools ?? []).map((rt) => (
-                  <span key={rt.tool.id} className="font-mono">
-                    {rt.tool.name} (v{rt.version.version}
-                    {rt.executableInBrowser
-                      ? ' · executable'
-                      : ` · non-executable: ${rt.nonExecutableReason}`}
-                    )
-                  </span>
+      {/* Right Conversation Pane */}
+      <div className="flex-1 rounded-xl border border-subtle bg-card shadow-card flex flex-col min-w-0 overflow-hidden">
+        {/* Chat Header with Agent Selector and Model Info */}
+        <div className="px-5 py-3 border-b border-subtle flex flex-wrap items-center justify-between gap-3 bg-raised/30 shrink-0">
+          <div className="flex flex-wrap items-center gap-2.5 min-w-0">
+            <div className="w-48">
+              <Select
+                value={selectedAgentId ?? ''}
+                onChange={(e) => {
+                  setSelectedAgentId(e.target.value || null);
+                  setSelectedChatId(null);
+                }}
+              >
+                {agents.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
                 ))}
-                {selectedAgent.attachedConnectors.map((conn) => (
-                  <span key={conn} className="font-mono text-amber-600 dark:text-amber-400">
-                    connector:{conn} (non-executable in browser)
-                  </span>
-                ))}
-              </div>
+              </Select>
             </div>
 
-            <div className="flex items-center gap-2 text-xs">
-              <label className="text-slate-500">Max tool iterations:</label>
-              <input
-                type="number"
-                min={1}
-                max={15}
-                value={maxIterations}
-                onChange={(e) =>
-                  setMaxIterations(Math.max(1, Number(e.target.value) || 5))
-                }
-                className="w-16 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 py-1 font-mono"
-              />
-            </div>
+            {activePreset ? (
+              <Badge variant="neutral" mono>
+                {activePreset.provider} · {activePreset.model_id}
+              </Badge>
+            ) : activeCredential ? (
+              <Badge variant="neutral" mono>
+                {activeCredential.provider}
+              </Badge>
+            ) : (
+              <Badge variant="warning">No API key linked</Badge>
+            )}
+
+            {(resolvedTools ?? []).map((rt) => (
+              <Badge
+                key={rt.tool.id}
+                mono
+                variant={rt.executableInBrowser ? 'info' : 'muted'}
+              >
+                {rt.tool.name} v{rt.version.version}
+                {!rt.executableInBrowser ? ' (non-executable)' : ''}
+              </Badge>
+            ))}
+
+            {selectedAgent?.attachedConnectors.map((conn) => (
+              <Badge key={conn} mono variant="muted">
+                {conn} (non-executable)
+              </Badge>
+            ))}
           </div>
-        )}
 
-        <div className="flex-1 p-5 overflow-y-auto space-y-4">
+          <div className="flex items-center gap-2 text-[12px] text-secondary shrink-0">
+            <span>Max steps</span>
+            <input
+              type="number"
+              min={1}
+              max={15}
+              value={maxIterations}
+              onChange={(e) =>
+                setMaxIterations(Math.max(1, Number(e.target.value) || 5))
+              }
+              className="w-14 h-7 rounded-md border border-subtle bg-app px-2 text-center font-mono text-[12px] text-primary"
+            />
+          </div>
+        </div>
+
+        {/* Message Thread */}
+        <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
           {runtimeError !== null && (
             <ErrorBanner
               error={runtimeError}
-              title="Agent runtime error"
+              title="Agent execution error"
               onDismiss={() => setRuntimeError(null)}
             />
           )}
 
           {displayedMessages.length === 0 ? (
-            <div className="py-16 text-center text-xs text-slate-500">
-              Send a message below to run the agent loop directly in your browser.
+            <div className="h-full flex flex-col items-center justify-center text-center py-16 space-y-1.5">
+              <p className="text-[14px] font-medium text-primary">
+                Start a conversation with {selectedAgent?.name}
+              </p>
+              <p className="text-[13px] text-secondary max-w-sm">
+                Press Enter to send a message, or Shift + Enter for a new line.
+              </p>
             </div>
           ) : (
-            displayedMessages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`rounded-xl p-4 space-y-3 ${
-                  msg.role === 'user'
-                    ? 'bg-slate-100 dark:bg-slate-800/80 ml-8'
-                    : 'border border-slate-200 dark:border-slate-800 mr-8'
-                }`}
-              >
-                <div className="flex items-center justify-between text-xs text-slate-500">
-                  <span className="font-semibold capitalize text-slate-900 dark:text-slate-100">
-                    {msg.role}
-                  </span>
-                </div>
-
-                {msg.content && (
-                  <p className="text-sm whitespace-pre-wrap leading-relaxed text-slate-800 dark:text-slate-200">
+            displayedMessages.map((msg) =>
+              msg.role === 'user' ? (
+                <div key={msg.id} className="flex justify-end">
+                  <div className="max-w-xl rounded-xl border border-subtle bg-raised px-4 py-2.5 text-[14px] text-primary whitespace-pre-wrap leading-relaxed">
                     {msg.content}
-                  </p>
-                )}
-
-                {msg.toolCalls && msg.toolCalls.length > 0 && (
-                  <div className="space-y-2 pt-1">
-                    {msg.toolCalls.map((tc) => (
-                      <ChatToolCallCard key={tc.id} toolCall={tc} />
-                    ))}
                   </div>
-                )}
-              </div>
-            ))
+                </div>
+              ) : (
+                <div key={msg.id} className="w-full space-y-3">
+                  <div className="text-[12px] font-medium text-secondary">
+                    {selectedAgent?.name ?? 'Assistant'}
+                  </div>
+
+                  {msg.toolCalls && msg.toolCalls.length > 0 && (
+                    <div className="space-y-2">
+                      {msg.toolCalls.map((tc) => (
+                        <ChatToolCallCard key={tc.id} toolCall={tc} />
+                      ))}
+                    </div>
+                  )}
+
+                  {msg.content && <MarkdownRenderer content={msg.content} />}
+                </div>
+              )
+            )
           )}
         </div>
 
+        {/* Fixed Rounded Composer at Bottom */}
         <form
-          onSubmit={handleSendMessage}
-          className="p-4 border-t border-slate-200 dark:border-slate-800 flex items-center gap-3"
+          onSubmit={handleFormSubmit}
+          className="p-4 border-t border-subtle bg-card shrink-0"
         >
-          <input
-            type="text"
-            value={promptInput}
-            onChange={(e) => setPromptInput(e.target.value)}
-            disabled={isStreaming || !selectedAgent}
-            placeholder="Message your agent..."
-            className="flex-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3.5 py-2.5 text-sm"
-          />
-          <button
-            type="submit"
-            disabled={isStreaming || !promptInput.trim() || !selectedAgent}
-            className="px-4 py-2.5 text-xs font-medium text-white bg-slate-900 dark:bg-slate-100 dark:text-slate-900 rounded-lg disabled:opacity-50 whitespace-nowrap shrink-0"
-          >
-            {isStreaming ? 'Running...' : 'Send'}
-          </button>
+          <div className="flex items-end gap-2 rounded-xl border border-subtle focus-within:border-accent bg-app p-2 transition-colors">
+            <Textarea
+              autoGrow
+              rows={1}
+              value={promptInput}
+              onChange={(e) => setPromptInput(e.target.value)}
+              onKeyDown={handleComposerKeyDown}
+              disabled={isStreaming || !selectedAgent}
+              placeholder="Ask anything... (Enter to send, Shift+Enter for newline)"
+              className="border-0 bg-transparent focus-visible:outline-none px-2 py-1 min-h-[36px]"
+            />
+
+            {isStreaming ? (
+              <Button
+                variant="danger"
+                size="md"
+                icon={<Square size={13} />}
+                onClick={() => {
+                  stopRequestedRef.current = true;
+                  setIsStreaming(false);
+                }}
+              >
+                Stop
+              </Button>
+            ) : (
+              <Button
+                variant="primary"
+                size="md"
+                type="submit"
+                icon={<CornerDownLeft size={14} />}
+                disabled={!promptInput.trim() || !selectedAgent}
+              >
+                Send
+              </Button>
+            )}
+          </div>
         </form>
       </div>
 
       <ConfirmDialog
         open={deleteTarget !== null}
-        title={`Delete conversation "${deleteTarget?.title ?? ''}"?`}
-        description="Removes this chat session from local storage."
-        confirmLabel="Delete Chat"
+        title={`Delete "${deleteTarget?.title ?? ''}"?`}
+        description="This conversation will be removed from this browser."
+        confirmLabel="Delete chat"
         isDestructive
         isPending={deleteChatMutation.isPending}
         onConfirm={async () => {
           if (!deleteTarget) return;
           await deleteChatMutation.mutateAsync(deleteTarget.id);
+          toast.success('Conversation deleted');
           setDeleteTarget(null);
         }}
         onCancel={() => setDeleteTarget(null)}

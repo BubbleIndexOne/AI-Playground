@@ -1,6 +1,7 @@
 import { ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuthSession } from '../features/auth/hooks/useAuth';
+import { Spinner } from '../shared/ui';
 
 export function RequireAuth({ children }: { readonly children: ReactNode }) {
   const { isLoading, isAuthenticated } = useAuthSession();
@@ -8,8 +9,9 @@ export function RequireAuth({ children }: { readonly children: ReactNode }) {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 text-xs text-slate-500">
-        Restoring session...
+      <div className="min-h-screen flex items-center justify-center bg-app text-[13px] text-secondary gap-2">
+        <Spinner size={16} />
+        <span>Loading workspace...</span>
       </div>
     );
   }
@@ -30,8 +32,9 @@ export function RedirectIfAuthenticated({
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 text-xs text-slate-500">
-        Restoring session...
+      <div className="min-h-screen flex items-center justify-center bg-app text-[13px] text-secondary gap-2">
+        <Spinner size={16} />
+        <span>Loading workspace...</span>
       </div>
     );
   }

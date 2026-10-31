@@ -1,83 +1,113 @@
+import { CheckCircle2, Circle, XCircle } from 'lucide-react';
 import { ToolStatus } from '../../../domain/enums';
+import { Card, ToolStatusBadge } from '../../../shared/ui';
 
 interface ToolLifecycleStepperProps {
   readonly status: ToolStatus;
   readonly rejectionReason?: string | null;
 }
 
-const LIFECYCLE_STEPS: { readonly key: ToolStatus; readonly label: string; readonly desc: string }[] = [
-  { key: ToolStatus.Draft, label: '01. Draft', desc: 'Author code & schema' },
-  { key: ToolStatus.Testing, label: '02. Testing', desc: 'Validate in sandbox' },
-  { key: ToolStatus.Registered, label: '03. Registered', desc: 'Waiting for admin review' },
-  { key: ToolStatus.Verified, label: '04. Verified', desc: 'Approved for publication' },
+const STEPS: {
+  readonly key: ToolStatus;
+  readonly label: string;
+  readonly summary: string;
+}[] = [
+  { key: ToolStatus.Draft, label: 'Draft', summary: 'Author code & schema' },
+  { key: ToolStatus.Testing, label: 'Testing', summary: 'Validate in sandbox' },
+  {
+    key: ToolStatus.Registered,
+    label: 'Awaiting review',
+    summary: 'Submitted for verification',
+  },
+  {
+    key: ToolStatus.Verified,
+    label: 'Verified',
+    summary: 'Approved for marketplace',
+  },
 ];
+
+const STEP_INDEX: Record<string, number> = {
+  [ToolStatus.Draft]: 0,
+  [ToolStatus.Testing]: 1,
+  [ToolStatus.Registered]: 2,
+  [ToolStatus.Verified]: 3,
+};
 
 export function ToolLifecycleStepper({
   status,
   rejectionReason,
 }: ToolLifecycleStepperProps) {
+  const currentIdx = STEP_INDEX[status] ?? -1;
+
   return (
-    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-          Publishing Lifecycle
-        </h2>
-        <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-          <span>Current state:</span>
-          <span className="font-semibold text-slate-900 dark:text-slate-100 capitalize">
-            {status}
-          </span>
-          {status === ToolStatus.Registered && (
-            <>
-              <span aria-hidden="true">·</span>
-              <span>Waiting for admin review</span>
-            </>
-          )}
-        </div>
+    <Card padding="md" className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <span className="text-[13px] font-semibold text-primary">
+          Lifecycle status
+        </span>
+        <ToolStatusBadge status={status} />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-        {LIFECYCLE_STEPS.map((step) => {
+      {/* Horizontal Stepper */}
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+        {STEPS.map((step, idx) => {
           const isCurrent = status === step.key;
+          const isCompleted = currentIdx > idx;
           return (
             <div
               key={step.key}
-              className={`rounded-lg border p-3 transition-colors ${
+              className={`flex items-start gap-2.5 rounded-lg border p-3 transition-colors ${
                 isCurrent
-                  ? 'border-slate-900 dark:border-slate-100 bg-slate-50 dark:bg-slate-800/60'
-                  : 'border-slate-200 dark:border-slate-800'
+                  ? 'border-accent bg-accent-tint'
+                  : isCompleted
+                    ? 'border-subtle bg-raised/60'
+                    : 'border-subtle bg-app/50'
               }`}
             >
-              <p className="text-xs font-semibold text-slate-900 dark:text-slate-100">
-                {step.label}
-              </p>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                {step.desc}
-              </p>
+              {isCompleted ? (
+                <CheckCircle2
+                  size={15}
+                  className="text-success shrink-0 mt-0.5"
+                />
+              ) : isCurrent ? (
+                <Circle
+                  size={15}
+                  className="text-accent fill-accent/20 shrink-0 mt-0.5"
+                />
+              ) : (
+                <Circle size={15} className="text-muted shrink-0 mt-0.5" />
+              )}
+              <div className="min-w-0">
+                <p
+                  className={`text-[13px] font-medium truncate ${
+                    isCurrent ? 'text-primary' : 'text-secondary'
+                  }`}
+                >
+                  {step.label}
+                </p>
+                <p className="text-[11px] text-muted truncate">
+                  {step.summary}
+                </p>
+              </div>
             </div>
           );
         })}
       </div>
 
       {status === ToolStatus.Rejected && (
-        <div className="rounded-lg border border-red-200 dark:border-red-900/60 bg-red-50/70 dark:bg-red-950/40 p-3.5 text-xs text-red-900 dark:text-red-200 space-y-1">
-          <p className="font-semibold">Tool Rejected by Admin Review</p>
-          <p>
-            {rejectionReason
-              ? `Reason: ${rejectionReason}`
-              : 'No rejection reason was provided by the reviewer.'}
-          </p>
-          <p className="text-red-700 dark:text-red-300">
-            Ship a new version with a passing sandbox test to request publication again.
-          </p>
+        <div className="flex items-start gap-2.5 rounded-lg border border-danger-border bg-danger-tint p-3.5 text-[13px]">
+          <XCircle size={16} className="text-danger shrink-0 mt-0.5" />
+          <div className="space-y-0.5">
+            <p className="font-semibold text-danger">Rejected during review</p>
+            <p className="text-primary">
+              {rejectionReason || 'No reason was provided by the reviewer.'}
+            </p>
+            <p className="text-[12px] text-secondary">
+              Save a new version with a passing test to request publishing again.
+            </p>
+          </div>
         </div>
       )}
-
-      {status === ToolStatus.Deprecated && (
-        <div className="rounded-lg border border-amber-200 dark:border-amber-900/60 bg-amber-50/70 dark:bg-amber-950/40 p-3.5 text-xs text-amber-900 dark:text-amber-200">
-          This tool is currently marked as deprecated.
-        </div>
-      )}
-    </div>
+    </Card>
   );
 }

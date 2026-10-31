@@ -1,9 +1,27 @@
+import { KeyRound, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { FormEvent, useState } from 'react';
 import { AI_PROVIDERS, AIProvider } from '../../../domain/providers';
-import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
-import { EmptyState } from '../../../shared/components/EmptyState';
 import { ErrorBanner } from '../../../shared/components/ErrorBanner';
-import { formatDateTime, maskApiKey } from '../../../shared/utils/formatters';
+import {
+  Badge,
+  Button,
+  Card,
+  ConfirmDialog,
+  Dialog,
+  EmptyState,
+  FormField,
+  Input,
+  PageHeader,
+  Select,
+  TableSkeleton,
+  Tooltip,
+  toast,
+} from '../../../shared/ui';
+import {
+  formatDateTime,
+  formatRelativeTime,
+  maskApiKey,
+} from '../../../shared/utils/formatters';
 import { ProviderCredential } from '../../../storage/interfaces/CredentialStore';
 import {
   useCredentialMutations,
@@ -14,6 +32,7 @@ export function CredentialsPage() {
   const { data: credentials, isLoading, error } = useCredentialsQuery();
   const { saveMutation, deleteMutation } = useCredentialMutations();
 
+  const [addModalOpen, setAddModalOpen] = useState(false);
   const [label, setLabel] = useState('');
   const [provider, setProvider] = useState<AIProvider>(AIProvider.Anthropic);
   const [apiKey, setApiKey] = useState('');
@@ -34,8 +53,10 @@ export function CredentialsPage() {
       provider,
       apiKey: apiKey.trim(),
     });
+    toast.success('API key saved', `Added key "${label.trim()}".`);
     setLabel('');
     setApiKey('');
+    setAddModalOpen(false);
   };
 
   const handleReplaceKey = async (e: FormEvent) => {
@@ -47,6 +68,7 @@ export function CredentialsPage() {
       provider: replacingCred.provider,
       apiKey: replacementKey.trim(),
     });
+    toast.success('API key replaced', `Updated key for "${replacingCred.label}".`);
     setReplacingCred(null);
     setReplacementKey('');
   };
@@ -54,195 +76,224 @@ export function CredentialsPage() {
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
     await deleteMutation.mutateAsync(deleteTarget.id);
+    toast.success('API key deleted', `Removed "${deleteTarget.label}".`);
     setDeleteTarget(null);
   };
 
+  const hasCredentials = Boolean(credentials && credentials.length > 0);
+
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-          BYOK Provider API Keys
-        </h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          Stored locally in IndexedDB behind the CredentialStore interface. Keys are never sent to the Agent Playground API.
-        </p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="API Keys"
+        description="Keys are stored in this browser and never sent to the Agent Playground server."
+        actions={
+          hasCredentials ? (
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              onClick={() => setAddModalOpen(true)}
+            >
+              <Plus className="w-4 h-4" />
+              Add key
+            </Button>
+          ) : undefined
+        }
+      />
 
       {error && <ErrorBanner error={error} />}
 
-      <form
-        onSubmit={handleCreate}
-        className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 space-y-4"
-      >
-        <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-          Add Provider Key
-        </h2>
+      {isLoading ? (
+        <TableSkeleton rows={3} />
+      ) : !credentials || credentials.length === 0 ? (
+        <EmptyState
+          icon={<KeyRound className="w-5 h-5" />}
+          title="No provider API keys saved"
+          description="Add an Anthropic, OpenAI, or Google Gemini API key to run agents in your browser."
+          actionLabel="Add key"
+          onAction={() => setAddModalOpen(true)}
+        />
+      ) : (
+        <Card padding="none" className="divide-y divide-subtle overflow-hidden">
+          {credentials.map((cred) => {
+            const providerMeta = AI_PROVIDERS.find((p) => p.id === cred.provider);
+            return (
+              <div
+                key={cred.id}
+                className="p-4 flex flex-wrap items-center justify-between gap-4 hover:bg-hover/40 transition-colors"
+              >
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="w-9 h-9 rounded-lg border border-subtle bg-raised flex items-center justify-center text-[13px] font-semibold text-primary shrink-0 uppercase">
+                    {cred.provider.slice(0, 2)}
+                  </div>
+                  <div className="space-y-0.5 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[14px] font-medium text-primary truncate">
+                        {cred.label}
+                      </span>
+                      <Badge variant="neutral" mono>
+                        {providerMeta?.name ?? cred.provider}
+                      </Badge>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 text-[12px] text-secondary">
+                      <span className="font-mono text-muted">
+                        {maskApiKey(cred.apiKey)}
+                      </span>
+                      <span aria-hidden="true">·</span>
+                      <Tooltip content={formatDateTime(cred.updatedAt)}>
+                        <span className="text-muted underline decoration-dotted cursor-default">
+                          Updated {formatRelativeTime(cred.updatedAt)}
+                        </span>
+                      </Tooltip>
+                    </div>
+                  </div>
+                </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="space-y-1.5">
-            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
-              Label *
-            </label>
-            <input
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      setReplacingCred(cred);
+                      setReplacementKey('');
+                    }}
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    Replace
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-danger hover:text-danger"
+                    onClick={() => setDeleteTarget(cred)}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Delete
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </Card>
+      )}
+
+      <Dialog
+        open={addModalOpen}
+        title="Add provider API key"
+        description="Keys are stored in this browser and never sent to the Agent Playground server."
+        maxWidth="md"
+        onClose={() => setAddModalOpen(false)}
+      >
+        <form onSubmit={handleCreate} className="space-y-4">
+          <FormField label="Label" htmlFor="cred-label" required>
+            <Input
+              id="cred-label"
               type="text"
               required
               value={label}
               onChange={(e) => setLabel(e.target.value)}
-              placeholder="Personal Anthropic Key"
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
+              placeholder="Personal Anthropic key"
             />
-          </div>
+          </FormField>
 
-          <div className="space-y-1.5">
-            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
-              Provider *
-            </label>
-            <select
+          <FormField label="Provider" htmlFor="cred-provider" required>
+            <Select
+              id="cred-provider"
               value={provider}
               onChange={(e) => setProvider(e.target.value as AIProvider)}
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
             >
               {AI_PROVIDERS.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
                 </option>
               ))}
-            </select>
-          </div>
+            </Select>
+          </FormField>
 
-          <div className="space-y-1.5">
-            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
-              API Key *
-            </label>
-            <input
+          <FormField label="API key" htmlFor="cred-key" required>
+            <Input
+              id="cred-key"
               type="password"
               required
               autoComplete="off"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              placeholder="sk-..."
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm font-mono"
+              placeholder="sk-…"
+              mono
             />
+          </FormField>
+
+          <div className="flex justify-end gap-2 pt-3 border-t border-subtle">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setAddModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              loading={saveMutation.isPending}
+            >
+              Save key
+            </Button>
           </div>
-        </div>
+        </form>
+      </Dialog>
 
-        <div className="flex justify-end">
-          <button
-            type="submit"
-            disabled={saveMutation.isPending}
-            className="px-4 py-2 text-xs font-medium text-white bg-slate-900 dark:bg-slate-100 dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-200 rounded-lg transition-colors"
-          >
-            Save API Key Locally
-          </button>
-        </div>
-      </form>
-
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-          Saved Credentials
-        </h2>
-
-        {isLoading ? (
-          <div className="p-6 text-sm text-slate-500">Loading credentials...</div>
-        ) : !credentials || credentials.length === 0 ? (
-          <EmptyState
-            title="No provider API keys saved"
-            description="Add an Anthropic, OpenAI, or Google Gemini API key above to run agents directly from your browser."
-          />
-        ) : (
-          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 divide-y divide-slate-200 dark:divide-slate-800">
-            {credentials.map((cred) => (
-              <div
-                key={cred.id}
-                className="p-4 flex flex-wrap items-center justify-between gap-4"
-              >
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                    {cred.label}
-                  </p>
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                    <span className="font-mono">{cred.provider}</span>
-                    <span aria-hidden="true">·</span>
-                    <span className="font-mono">{maskApiKey(cred.apiKey)}</span>
-                    <span aria-hidden="true">·</span>
-                    <span className="tabular-nums">
-                      Updated {formatDateTime(cred.updatedAt)}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setReplacingCred(cred);
-                      setReplacementKey('');
-                    }}
-                    className="px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg"
-                  >
-                    Replace Key
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDeleteTarget(cred)}
-                    className="px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {replacingCred && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-xs p-4">
-          <form
-            onSubmit={handleReplaceKey}
-            className="w-full max-w-md rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-lg space-y-4"
-          >
-            <div className="space-y-1">
-              <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-                Replace API Key for &quot;{replacingCred.label}&quot;
-              </h3>
-              <p className="text-xs text-slate-500">
-                Current masked key: <code className="font-mono">{maskApiKey(replacingCred.apiKey)}</code>
-              </p>
-            </div>
-            <input
+      <Dialog
+        open={replacingCred !== null}
+        title={`Replace key for "${replacingCred?.label ?? ''}"`}
+        description={
+          replacingCred
+            ? `Current key: ${maskApiKey(replacingCred.apiKey)}`
+            : undefined
+        }
+        maxWidth="md"
+        onClose={() => setReplacingCred(null)}
+      >
+        <form onSubmit={handleReplaceKey} className="space-y-4">
+          <FormField label="New API key" htmlFor="replace-key-input" required>
+            <Input
+              id="replace-key-input"
               type="password"
               required
               autoComplete="off"
               value={replacementKey}
               onChange={(e) => setReplacementKey(e.target.value)}
-              placeholder="Enter new API key..."
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm font-mono"
+              placeholder="Enter new API key…"
+              mono
             />
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setReplacingCred(null)}
-                className="px-4 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 rounded-lg"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-4 py-2 text-xs font-medium text-white bg-slate-900 dark:bg-slate-100 dark:text-slate-900 rounded-lg"
-              >
-                Save New Key
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+          </FormField>
+
+          <div className="flex justify-end gap-2 pt-3 border-t border-subtle">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setReplacingCred(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              loading={saveMutation.isPending}
+            >
+              Replace key
+            </Button>
+          </div>
+        </form>
+      </Dialog>
 
       <ConfirmDialog
         open={deleteTarget !== null}
-        title={`Delete credential "${deleteTarget?.label ?? ''}"?`}
-        description="Removes this API key from local IndexedDB storage."
-        confirmLabel="Delete Key"
+        title={`Delete key "${deleteTarget?.label ?? ''}"?`}
+        description="This removes the API key from your browser storage."
+        confirmLabel="Delete key"
         isDestructive
         isPending={deleteMutation.isPending}
         onConfirm={handleConfirmDelete}

@@ -1,7 +1,18 @@
+import { Check, ShieldAlert, Trash2, XCircle } from 'lucide-react';
 import { useState } from 'react';
 import { Tool } from '../../../api/types/tools.types';
-import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
 import { ErrorBanner } from '../../../shared/components/ErrorBanner';
+import {
+  Badge,
+  Button,
+  CodeBlock,
+  ConfirmDialog,
+  Drawer,
+  FormField,
+  Input,
+  ToolStatusBadge,
+  toast,
+} from '../../../shared/ui';
 import { computeLineDiff } from '../../../shared/utils/diffLines';
 import {
   useAdminMutations,
@@ -9,25 +20,28 @@ import {
 } from '../hooks/useAdmin';
 
 interface AdminToolReviewCardProps {
-  readonly tool: Tool;
+  readonly tool: Tool | null;
+  readonly onClose: () => void;
 }
 
-export function AdminToolReviewCard({ tool }: AdminToolReviewCardProps) {
-  const [expanded, setExpanded] = useState(false);
+export function AdminToolReviewCard({
+  tool,
+  onClose,
+}: AdminToolReviewCardProps) {
   const [confirmMode, setConfirmMode] = useState<
     'reject' | 'deprecate' | 'purge' | null
   >(null);
   const [rejectReason, setRejectReason] = useState('');
 
-  const { data: inspection } = useAdminToolInspectionQuery(
-    expanded ? tool.id : null
-  );
+  const { data: inspection } = useAdminToolInspectionQuery(tool?.id ?? null);
   const {
     approveMutation,
     rejectMutation,
     deprecateMutation,
     purgeToolMutation,
   } = useAdminMutations();
+
+  if (!tool) return null;
 
   const currentVersion =
     tool.current_version ?? inspection?.versions?.[0] ?? null;
@@ -38,6 +52,12 @@ export function AdminToolReviewCard({ tool }: AdminToolReviewCardProps) {
       ? computeLineDiff(previousVersion.code ?? '', currentVersion.code ?? '')
       : [];
 
+  const handleApprove = async () => {
+    await approveMutation.mutateAsync(tool.id);
+    toast.success('Tool approved', `"${tool.name}" is now verified and public.`);
+    onClose();
+  };
+
   const handleConfirmAction = async () => {
     if (!confirmMode) return;
     if (confirmMode === 'reject') {
@@ -45,12 +65,16 @@ export function AdminToolReviewCard({ tool }: AdminToolReviewCardProps) {
         toolId: tool.id,
         reason: rejectReason,
       });
+      toast.info('Tool rejected', `"${tool.name}" was marked as rejected.`);
     } else if (confirmMode === 'deprecate') {
       await deprecateMutation.mutateAsync(tool.id);
+      toast.info('Tool deprecated', `"${tool.name}" was marked as deprecated.`);
     } else if (confirmMode === 'purge') {
       await purgeToolMutation.mutateAsync(tool.id);
+      toast.success('Tool deleted', `"${tool.name}" was permanently deleted.`);
     }
     setConfirmMode(null);
+    onClose();
   };
 
   const actionError =
@@ -60,167 +84,183 @@ export function AdminToolReviewCard({ tool }: AdminToolReviewCardProps) {
     purgeToolMutation.error;
 
   return (
-    <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="space-y-1">
-          <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-            {tool.name}
-          </h3>
-          {tool.description && (
-            <p className="text-xs text-slate-600 dark:text-slate-300">
-              {tool.description}
+    <>
+      <Drawer
+        open={Boolean(tool)}
+        title={`Review: ${tool.name}`}
+        description={tool.description ?? 'Inspect code, schema, test results, and version diff.'}
+        width="xl"
+        onClose={onClose}
+        footer={
+          <div className="flex flex-wrap items-center justify-between gap-2 w-full">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-danger hover:text-danger"
+              onClick={() => setConfirmMode('purge')}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Purge
+            </Button>
+
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setConfirmMode('deprecate')}
+              >
+                <ShieldAlert className="w-3.5 h-3.5" />
+                Deprecate
+              </Button>
+              <Button
+                type="button"
+                variant="danger"
+                size="sm"
+                onClick={() => {
+                  setRejectReason('');
+                  setConfirmMode('reject');
+                }}
+              >
+                <XCircle className="w-3.5 h-3.5" />
+                Reject
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                loading={approveMutation.isPending}
+                onClick={handleApprove}
+              >
+                <Check className="w-3.5 h-3.5" />
+                Approve
+              </Button>
+            </div>
+          </div>
+        }
+      >
+        <div className="space-y-6">
+          {actionError && <ErrorBanner error={actionError} />}
+
+          <div className="flex flex-wrap items-center gap-2">
+            <ToolStatusBadge status={tool.status} />
+            <Badge variant="neutral" mono>
+              {tool.type}
+            </Badge>
+            <Badge variant="neutral" mono>
+              {tool.id}
+            </Badge>
+            {currentVersion && (
+              <Badge variant="info" mono>
+                v{currentVersion.version}
+              </Badge>
+            )}
+            {(currentVersion?.capabilities_json ?? []).map((cap) => (
+              <Badge key={cap} variant="warning" mono>
+                {cap}
+              </Badge>
+            ))}
+          </div>
+
+          {currentVersion ? (
+            <div className="space-y-5">
+              <div className="space-y-1.5">
+                <span className="text-[12px] font-medium text-secondary">
+                  Source code (v{currentVersion.version})
+                </span>
+                <CodeBlock
+                  code={currentVersion.code ?? '// No client source code (MCP tool)'}
+                  showLineNumbers
+                  maxHeight="260px"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <span className="text-[12px] font-medium text-secondary">
+                    Parameter schema
+                  </span>
+                  <CodeBlock
+                    code={JSON.stringify(currentVersion.schema_json ?? {}, null, 2)}
+                    maxHeight="220px"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <span className="text-[12px] font-medium text-secondary">
+                    Recorded test results
+                  </span>
+                  <CodeBlock
+                    code={JSON.stringify(
+                      currentVersion.test_results_json ?? {},
+                      null,
+                      2
+                    )}
+                    maxHeight="220px"
+                  />
+                </div>
+              </div>
+
+              {previousVersion && (
+                <div className="space-y-1.5">
+                  <span className="text-[12px] font-medium text-secondary">
+                    Diff against v{previousVersion.version}
+                  </span>
+                  <div className="rounded-lg border border-subtle bg-app p-3 font-mono text-[12px] overflow-x-auto max-h-56">
+                    {codeDiff.map((line, idx) => (
+                      <div
+                        key={idx}
+                        className={
+                          line.type === 'added'
+                            ? 'bg-success-tint text-success px-1.5 py-0.5'
+                            : line.type === 'removed'
+                              ? 'bg-danger-tint text-danger px-1.5 py-0.5'
+                              : 'text-secondary px-1.5 py-0.5'
+                        }
+                      >
+                        {line.type === 'added'
+                          ? '+ '
+                          : line.type === 'removed'
+                            ? '- '
+                            : '  '}
+                        {line.text}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="text-[13px] text-secondary">
+              No version details available for this tool.
             </p>
           )}
-          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-            <span className="font-mono">ID: {tool.id}</span>
-            <span aria-hidden="true">·</span>
-            <span className="font-mono">Type: {tool.type}</span>
-            <span aria-hidden="true">·</span>
-            <span>Status: {tool.status}</span>
-            {currentVersion && (
-              <>
-                <span aria-hidden="true">·</span>
-                <span className="font-mono">v{currentVersion.version}</span>
-              </>
-            )}
-          </div>
         </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setExpanded(!expanded)}
-            className="px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 rounded-lg"
-          >
-            {expanded ? 'Hide Inspection' : 'Inspect Code & Diff'}
-          </button>
-          <button
-            type="button"
-            onClick={() => approveMutation.mutate(tool.id)}
-            disabled={approveMutation.isPending}
-            className="px-3 py-1.5 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg"
-          >
-            Approve (Verified + Public)
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setRejectReason('');
-              setConfirmMode('reject');
-            }}
-            className="px-3 py-1.5 text-xs font-medium text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800 rounded-lg"
-          >
-            Reject
-          </button>
-          <button
-            type="button"
-            onClick={() => setConfirmMode('deprecate')}
-            className="px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 rounded-lg"
-          >
-            Deprecate
-          </button>
-          <button
-            type="button"
-            onClick={() => setConfirmMode('purge')}
-            className="px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg"
-          >
-            Purge
-          </button>
-        </div>
-      </div>
-
-      {actionError && <ErrorBanner error={actionError} />}
-
-      {expanded && currentVersion && (
-        <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-4 text-xs">
-          <div className="flex flex-wrap items-center gap-2 text-slate-600 dark:text-slate-400">
-            <span>
-              Capabilities:{' '}
-              {currentVersion.capabilities_json?.length
-                ? currentVersion.capabilities_json.join(', ')
-                : 'none'}
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <span className="font-semibold text-slate-700 dark:text-slate-300">
-                Code (v{currentVersion.version})
-              </span>
-              <pre className="p-3 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 font-mono overflow-x-auto max-h-56">
-                {currentVersion.code ?? '// No code (MCP tool)'}
-              </pre>
-            </div>
-            <div className="space-y-1">
-              <span className="font-semibold text-slate-700 dark:text-slate-300">
-                Schema & Test Results
-              </span>
-              <pre className="p-3 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 font-mono overflow-x-auto max-h-56">
-                {JSON.stringify(
-                  {
-                    schema_json: currentVersion.schema_json,
-                    test_results_json: currentVersion.test_results_json,
-                  },
-                  null,
-                  2
-                )}
-              </pre>
-            </div>
-          </div>
-
-          {previousVersion && (
-            <div className="space-y-1">
-              <span className="font-semibold text-slate-700 dark:text-slate-300">
-                Diff against v{previousVersion.version}
-              </span>
-              <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-3 font-mono overflow-x-auto max-h-48">
-                {codeDiff.map((line, idx) => (
-                  <div
-                    key={idx}
-                    className={
-                      line.type === 'added'
-                        ? 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 px-1'
-                        : line.type === 'removed'
-                          ? 'bg-red-500/15 text-red-800 dark:text-red-300 px-1'
-                          : 'text-slate-600 dark:text-slate-400 px-1'
-                    }
-                  >
-                    {line.type === 'added'
-                      ? '+ '
-                      : line.type === 'removed'
-                        ? '- '
-                        : '  '}
-                    {line.text}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+      </Drawer>
 
       <ConfirmDialog
         open={confirmMode !== null}
         title={
           confirmMode === 'purge'
-            ? `Permanently purge "${tool.name}"?`
+            ? `Delete "${tool.name}" permanently?`
             : confirmMode === 'reject'
               ? `Reject "${tool.name}"?`
               : `Deprecate "${tool.name}"?`
         }
         description={
           confirmMode === 'purge'
-            ? 'Calls DELETE /tools/{id}?purge=true with x-admin-key. This cannot be undone.'
+            ? 'This permanently deletes the tool and all its versions.'
             : confirmMode === 'reject'
-              ? 'Sets tool status to rejected via PATCH /tools/{id}.'
-              : 'Sets tool status to deprecated via PATCH /tools/{id}.'
+              ? 'Marks this tool as rejected and removes it from the review queue.'
+              : 'Marks this tool as deprecated.'
         }
         confirmLabel={
           confirmMode === 'purge'
-            ? 'Purge Tool'
+            ? 'Purge tool'
             : confirmMode === 'reject'
-              ? 'Reject Tool'
-              : 'Deprecate Tool'
+              ? 'Reject tool'
+              : 'Deprecate tool'
         }
         isDestructive
         isPending={
@@ -232,20 +272,17 @@ export function AdminToolReviewCard({ tool }: AdminToolReviewCardProps) {
         onCancel={() => setConfirmMode(null)}
       >
         {confirmMode === 'reject' && (
-          <div className="space-y-1.5">
-            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
-              Rejection reason (optional)
-            </label>
-            <input
+          <FormField label="Rejection reason" htmlFor="reject-reason-input">
+            <Input
+              id="reject-reason-input"
               type="text"
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
-              placeholder="Explain why this version was rejected..."
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-xs"
+              placeholder="Explain why this version was rejected…"
             />
-          </div>
+          </FormField>
         )}
       </ConfirmDialog>
-    </div>
+    </>
   );
 }

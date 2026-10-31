@@ -11,6 +11,16 @@ import {
   ToolType,
 } from '../../../domain/enums';
 import { ErrorBanner } from '../../../shared/components/ErrorBanner';
+import {
+  Button,
+  Dialog,
+  FormField,
+  Input,
+  Select,
+  Switch,
+  Textarea,
+  toast,
+} from '../../../shared/ui';
 import { useToolMutations } from '../hooks/useTools';
 
 interface ToolMetadataModalProps {
@@ -61,14 +71,11 @@ export function ToolMetadataModal({
     setValidationError(null);
   }, [open, initialTool]);
 
-  if (!open) return null;
-
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setValidationError(null);
 
     if (initialTool) {
-      // Creators may set only draft or deprecated themselves through PATCH
       const nextStatus = CREATOR_ALLOWED_STATUSES.includes(status)
         ? status
         : undefined;
@@ -81,13 +88,16 @@ export function ToolMetadataModal({
         ...(nextStatus ? { status: nextStatus } : {}),
       });
       if (!parsed.success) {
-        setValidationError(parsed.error.issues.map((i) => i.message).join(' · '));
+        setValidationError(
+          parsed.error.issues.map((i) => i.message).join(' · ')
+        );
         return;
       }
       await updateToolMutation.mutateAsync({
         id: initialTool.id,
         body: parsed.data,
       });
+      toast.success('Tool details updated');
       onClose();
     } else {
       const parsed = CreateToolSchema.safeParse({
@@ -99,10 +109,13 @@ export function ToolMetadataModal({
         allow_client_execution: allowClientExecution,
       });
       if (!parsed.success) {
-        setValidationError(parsed.error.issues.map((i) => i.message).join(' · '));
+        setValidationError(
+          parsed.error.issues.map((i) => i.message).join(' · ')
+        );
         return;
       }
       const created = await createToolMutation.mutateAsync(parsed.data);
+      toast.success('Tool created');
       onClose();
       onCreated?.(created);
     }
@@ -112,147 +125,122 @@ export function ToolMetadataModal({
   const mutationError = createToolMutation.error ?? updateToolMutation.error;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-xs p-4">
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title={initialTool ? 'Edit tool details' : 'Create tool'}
+      description={
+        initialTool
+          ? 'Update name, description, visibility, and status.'
+          : 'Define a client-side JavaScript tool or an MCP tool.'
+      }
+      maxWidth="lg"
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            type="submit"
+            form="tool-metadata-form"
+            loading={isPending}
+          >
+            {initialTool ? 'Save changes' : 'Create tool'}
+          </Button>
+        </>
+      }
+    >
       <form
+        id="tool-metadata-form"
         onSubmit={handleSubmit}
-        className="w-full max-w-lg rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-lg space-y-4"
+        className="space-y-4"
       >
-        <div className="space-y-1">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-            {initialTool ? 'Edit Tool Metadata' : 'Create New Tool'}
-          </h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            {initialTool
-              ? 'Update metadata via PATCH /tools/{id}. Creators can set status only to draft or deprecated.'
-              : 'Register a client or MCP tool via POST /tools.'}
-          </p>
-        </div>
-
         {validationError && <ErrorBanner error={new Error(validationError)} />}
         {mutationError && <ErrorBanner error={mutationError} />}
 
-        <div className="space-y-1.5">
-          <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
-            Name *
-          </label>
-          <input
+        <FormField label="Name" required>
+          <Input
             type="text"
             required
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="weather_lookup"
-            className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
           />
-        </div>
+        </FormField>
 
-        <div className="space-y-1.5">
-          <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
-            Description
-          </label>
-          <textarea
+        <FormField label="Description">
+          <Textarea
             rows={2}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Describe what this tool does for the agent..."
-            className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
+            placeholder="Explain what this tool does and when an agent should call it..."
           />
-        </div>
+        </FormField>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
-              Tool Type *
-            </label>
-            <select
+          <FormField label="Tool type" required>
+            <Select
               value={type}
               disabled={Boolean(initialTool)}
               onChange={(e) => setType(e.target.value as ToolType)}
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm disabled:opacity-60"
             >
-              <option value={ToolType.Client}>client (JavaScript module)</option>
-              <option value={ToolType.Mcp}>mcp (Model Context Protocol)</option>
-            </select>
-          </div>
+              <option value={ToolType.Client}>Client (JavaScript)</option>
+              <option value={ToolType.Mcp}>MCP</option>
+            </Select>
+          </FormField>
 
-          <div className="space-y-1.5">
-            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
-              Connector Type
-            </label>
-            <select
+          <FormField label="Connector">
+            <Select
               value={connectorType}
               onChange={(e) =>
                 setConnectorType(e.target.value as ConnectorType | '')
               }
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
             >
               <option value="">None</option>
-              <option value={ConnectorType.Postgres}>postgres</option>
-              <option value={ConnectorType.Slack}>slack</option>
-            </select>
-          </div>
+              <option value={ConnectorType.Postgres}>Postgres</option>
+              <option value={ConnectorType.Slack}>Slack</option>
+            </Select>
+          </FormField>
         </div>
 
         {initialTool && (
-          <div className="space-y-1.5">
-            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
-              Creator Status (only draft or deprecated allowed)
-            </label>
-            <select
+          <FormField
+            label="Lifecycle status"
+            hint="Creators can set a tool to Draft or Deprecated."
+          >
+            <Select
               value={
                 CREATOR_ALLOWED_STATUSES.includes(status)
                   ? status
                   : ToolStatus.Draft
               }
               onChange={(e) => setStatus(e.target.value as ToolStatus)}
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
             >
               {CREATOR_ALLOWED_STATUSES.map((st) => (
                 <option key={st} value={st}>
-                  {st}
+                  {st === ToolStatus.Draft ? 'Draft' : 'Deprecated'}
                 </option>
               ))}
-            </select>
-          </div>
+            </Select>
+          </FormField>
         )}
 
-        <div className="flex flex-wrap items-center gap-6 pt-1">
-          <label className="inline-flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={allowClientExecution}
-              onChange={(e) => setAllowClientExecution(e.target.checked)}
-              className="rounded border-slate-300 dark:border-slate-700"
-            />
-            Allow client execution
-          </label>
-          <label className="inline-flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={isPublic}
-              onChange={(e) => setIsPublic(e.target.checked)}
-              className="rounded border-slate-300 dark:border-slate-700"
-            />
-            Request public listing
-          </label>
-        </div>
-
-        <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-200 dark:border-slate-800">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 rounded-lg"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={isPending}
-            className="px-4 py-2 text-xs font-medium text-white bg-slate-900 dark:bg-slate-100 dark:text-slate-900 rounded-lg disabled:opacity-50"
-          >
-            {isPending ? 'Saving...' : initialTool ? 'Save Changes' : 'Create Tool'}
-          </button>
+        <div className="pt-2 space-y-3">
+          <Switch
+            checked={allowClientExecution}
+            onChange={setAllowClientExecution}
+            label="Allow browser execution"
+            description="Permits running this tool inside the isolated browser worker sandbox."
+          />
+          <Switch
+            checked={isPublic}
+            onChange={setIsPublic}
+            label="Public visibility"
+            description="List in the Marketplace once verified by an admin."
+          />
         </div>
       </form>
-    </div>
+    </Dialog>
   );
 }

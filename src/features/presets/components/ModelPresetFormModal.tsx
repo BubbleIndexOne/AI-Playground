@@ -1,3 +1,4 @@
+import { RotateCcw } from 'lucide-react';
 import { FormEvent, useEffect, useState } from 'react';
 import {
   CreateModelPresetSchema,
@@ -8,6 +9,14 @@ import {
 } from '../../../api/types/modelPresets.types';
 import { AI_PROVIDERS } from '../../../domain/providers';
 import { ErrorBanner } from '../../../shared/components/ErrorBanner';
+import {
+  Button,
+  Dialog,
+  FormField,
+  Input,
+  Select,
+  toast,
+} from '../../../shared/ui';
 import { useModelPresetMutations } from '../hooks/useModelPresets';
 import { PresetParamsFields } from './PresetParamsFields';
 
@@ -69,10 +78,9 @@ export function ModelPresetFormModal({
     setValidationError(null);
   }, [open, initialPreset, defaultsData]);
 
-  if (!open) return null;
-
   const handleApplyDefaults = () => {
     setParams(extractDefaultParams(defaultsData, provider, modelId));
+    toast.info('Defaults restored', 'Parameters reset to server defaults.');
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -97,8 +105,10 @@ export function ModelPresetFormModal({
         id: initialPreset.id,
         body: parsed.data,
       });
+      toast.success('Preset updated', `Saved changes to "${parsed.data.name}".`);
     } else {
       await createMutation.mutateAsync(parsed.data);
+      toast.success('Preset created', `Created "${parsed.data.name}".`);
     }
     onClose();
   };
@@ -108,65 +118,42 @@ export function ModelPresetFormModal({
   const providerMeta = AI_PROVIDERS.find((p) => p.id === provider);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-xs p-4 overflow-y-auto">
-      <form
-        onSubmit={handleSubmit}
-        className="w-full max-w-2xl rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-lg space-y-5 my-8"
-      >
-        <div className="flex items-center justify-between gap-4">
-          <div className="space-y-0.5">
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-              {initialPreset ? 'Edit Model Preset' : 'Create Model Preset'}
-            </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Prefilled from GET /model-presets/defaults when available.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={handleApplyDefaults}
-            className="px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors whitespace-nowrap shrink-0"
-          >
-            Reset to Server Defaults
-          </button>
-        </div>
-
+    <Dialog
+      open={open}
+      title={initialPreset ? 'Edit model preset' : 'New model preset'}
+      description="Configure model selection and generation parameters."
+      maxWidth="2xl"
+      onClose={onClose}
+    >
+      <form onSubmit={handleSubmit} className="space-y-5">
         {validationError && <ErrorBanner error={new Error(validationError)} />}
         {mutationError && <ErrorBanner error={mutationError} />}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-1">
-            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
-              Preset Name *
-            </label>
-            <input
+          <FormField label="Preset name" htmlFor="preset-name" required>
+            <Input
+              id="preset-name"
               type="text"
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Balanced Coding Preset"
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
+              placeholder="Balanced coding preset"
             />
-          </div>
+          </FormField>
 
-          <div className="space-y-1">
-            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
-              Description
-            </label>
-            <input
+          <FormField label="Description" htmlFor="preset-desc">
+            <Input
+              id="preset-desc"
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Optional description"
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
             />
-          </div>
+          </FormField>
 
-          <div className="space-y-1">
-            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
-              Provider *
-            </label>
-            <select
+          <FormField label="Provider" htmlFor="preset-provider" required>
+            <Select
+              id="preset-provider"
               value={provider}
               onChange={(e) => {
                 const nextProv = e.target.value;
@@ -176,60 +163,60 @@ export function ModelPresetFormModal({
                   setModelId(found.defaultModels[0]);
                 }
               }}
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
             >
               {AI_PROVIDERS.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name} ({p.id})
                 </option>
               ))}
-            </select>
-          </div>
+            </Select>
+          </FormField>
 
-          <div className="space-y-1">
-            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
-              Model ID *
-            </label>
-            <input
+          <FormField label="Model ID" htmlFor="preset-model-id" required>
+            <Input
+              id="preset-model-id"
               type="text"
               required
               list="preset-model-suggestions"
               value={modelId}
               onChange={(e) => setModelId(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm font-mono"
+              mono
             />
             <datalist id="preset-model-suggestions">
               {providerMeta?.defaultModels.map((m) => (
                 <option key={m} value={m} />
               ))}
             </datalist>
-          </div>
+          </FormField>
         </div>
 
-        <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-3">
-          <h3 className="text-xs font-semibold text-slate-900 dark:text-slate-100">
-            Generation Parameters
-          </h3>
+        <div className="pt-4 border-t border-subtle space-y-4">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-[13px] font-semibold text-primary">
+              Generation parameters
+            </h3>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={handleApplyDefaults}
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              Reset to defaults
+            </Button>
+          </div>
           <PresetParamsFields value={params} onChange={setParams} />
         </div>
 
-        <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-200 dark:border-slate-800">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 rounded-lg"
-          >
+        <div className="flex items-center justify-end gap-2 pt-4 border-t border-subtle">
+          <Button type="button" variant="secondary" onClick={onClose}>
             Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={isPending}
-            className="px-4 py-2 text-xs font-medium text-white bg-slate-900 dark:bg-slate-100 dark:text-slate-900 rounded-lg disabled:opacity-50"
-          >
-            {isPending ? 'Saving...' : initialPreset ? 'Save Preset' : 'Create Preset'}
-          </button>
+          </Button>
+          <Button type="submit" variant="primary" loading={isPending}>
+            {initialPreset ? 'Save changes' : 'Create preset'}
+          </Button>
         </div>
       </form>
-    </div>
+    </Dialog>
   );
 }

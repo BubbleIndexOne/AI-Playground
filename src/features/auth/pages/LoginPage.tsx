@@ -2,6 +2,7 @@ import { FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { LoginRequestSchema } from '../../../api/types/auth.types';
 import { ErrorBanner } from '../../../shared/components/ErrorBanner';
+import { Button, Card, FormField, Input } from '../../../shared/ui';
 import { useAuthMutations } from '../hooks/useAuth';
 
 export function LoginPage() {
@@ -31,85 +32,82 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 px-4 py-12">
-      <div className="w-full max-w-md rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 space-y-6">
-        <div className="space-y-1.5">
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-            Sign in to Agent Playground
+    <div className="min-h-screen flex items-center justify-center bg-app px-4 py-12">
+      <div className="w-full max-w-md space-y-6">
+        <div className="flex flex-col items-center text-center space-y-2">
+          <div className="flex items-center gap-2.5">
+            <span className="w-7 h-7 rounded-lg bg-accent flex items-center justify-center text-white text-[13px] font-semibold">
+              A
+            </span>
+            <span className="text-[16px] font-semibold tracking-tight text-primary">
+              Agent Playground
+            </span>
+          </div>
+          <h1 className="text-[20px] font-semibold tracking-tight text-primary pt-1">
+            Sign in to your workspace
           </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Access your tools, connectors, model presets, and BYOK agents.
+          <p className="text-[13px] text-secondary">
+            Build and test tools, configure connectors, and run agents.
           </p>
         </div>
 
-        {validationErrors.length > 0 && (
-          <ErrorBanner
-            error={new Error(validationErrors.join(' · '))}
-            title="Validation error"
-          />
-        )}
-
-        {loginMutation.error && (
-          <ErrorBanner error={loginMutation.error} title="Sign in failed" />
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-          <div className="space-y-1.5">
-            <label
-              htmlFor="login-email"
-              className="block text-xs font-medium text-slate-700 dark:text-slate-300"
-            >
-              Email address
-            </label>
-            <input
-              id="login-email"
-              type="email"
-              required
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3.5 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-300"
-              placeholder="you@example.com"
+        <Card padding="lg" className="space-y-5">
+          {validationErrors.length > 0 && (
+            <ErrorBanner
+              error={new Error(validationErrors.join(' · '))}
+              title="Validation error"
             />
-          </div>
+          )}
 
-          <div className="space-y-1.5">
-            <label
-              htmlFor="login-password"
-              className="block text-xs font-medium text-slate-700 dark:text-slate-300"
+          {loginMutation.error && (
+            <ErrorBanner error={loginMutation.error} title="Sign in failed" />
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+            <FormField label="Email address" htmlFor="login-email" required>
+              <Input
+                id="login-email"
+                type="email"
+                required
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+              />
+            </FormField>
+
+            <FormField label="Password" htmlFor="login-password" required>
+              <Input
+                id="login-password"
+                type="password"
+                required
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+              />
+            </FormField>
+
+            <Button
+              type="submit"
+              variant="primary"
+              className="w-full"
+              loading={loginMutation.isPending}
             >
-              Password
-            </label>
-            <input
-              id="login-password"
-              type="password"
-              required
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3.5 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-300"
-              placeholder="••••••••"
-            />
+              Sign in
+            </Button>
+          </form>
+
+          <div className="pt-4 border-t border-subtle flex items-center justify-between text-[12px] text-secondary">
+            <span>New to Agent Playground?</span>
+            <Link
+              to="/auth/signup"
+              className="font-medium text-accent hover:underline"
+            >
+              Create an account
+            </Link>
           </div>
-
-          <button
-            type="submit"
-            disabled={loginMutation.isPending}
-            className="w-full py-2.5 px-4 rounded-lg text-sm font-medium text-white bg-slate-900 dark:bg-slate-100 dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-200 transition-colors disabled:opacity-50"
-          >
-            {loginMutation.isPending ? 'Signing in...' : 'Sign In'}
-          </button>
-        </form>
-
-        <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-          <span>Don&apos;t have an account?</span>
-          <Link
-            to="/auth/signup"
-            className="font-medium text-slate-900 dark:text-slate-100 hover:underline"
-          >
-            Create an account
-          </Link>
-        </div>
+        </Card>
       </div>
     </div>
   );

@@ -1,5 +1,7 @@
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, X } from 'lucide-react';
 import { ApiError } from '../../api/http/errors';
+import { CodeBlock } from '../ui/CodeBlock';
+import { IconButton } from '../ui/IconButton';
 
 interface ErrorBannerProps {
   readonly error: unknown;
@@ -23,48 +25,49 @@ export function ErrorBanner({ error, title, onDismiss }: ErrorBannerProps) {
   return (
     <div
       role="alert"
-      className="rounded-lg border border-red-200 dark:border-red-900/60 bg-red-50/80 dark:bg-red-950/40 p-4 text-sm text-red-900 dark:text-red-200"
+      className="rounded-xl border border-danger-border bg-danger-tint p-4 text-[13px] text-primary"
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="flex items-start gap-2.5">
-          <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
-          <div className="space-y-1.5">
-            {title && (
-              <p className="font-semibold text-red-950 dark:text-red-100">
-                {title}
-              </p>
-            )}
+        <div className="flex items-start gap-2.5 min-w-0 flex-1">
+          <AlertCircle size={16} className="text-danger shrink-0 mt-0.5" />
+          <div className="space-y-1.5 min-w-0 flex-1">
+            <p className="font-semibold text-danger">
+              {title ?? 'Request could not be completed'}
+            </p>
             {messages.length === 1 ? (
-              <p>{messages[0]}</p>
+              <p className="text-primary leading-relaxed">{messages[0]}</p>
             ) : (
-              <ul className="list-disc pl-4 space-y-1">
+              <ul className="list-disc pl-4 space-y-1 text-primary">
                 {messages.map((msg, idx) => (
                   <li key={idx}>{msg}</li>
                 ))}
               </ul>
             )}
             {reason && reason !== messages[0] && (
-              <p className="text-xs text-red-800 dark:text-red-300">
-                Reason: {reason}
-              </p>
+              <p className="text-[12px] text-secondary">Reason: {reason}</p>
             )}
             {details !== undefined && details !== null && (
-              <pre className="mt-2 p-2.5 rounded bg-red-100/70 dark:bg-red-950/70 text-xs font-mono overflow-x-auto">
-                {typeof details === 'string'
-                  ? details
-                  : JSON.stringify(details, null, 2)}
-              </pre>
+              <div className="pt-1">
+                <CodeBlock
+                  code={
+                    typeof details === 'string'
+                      ? details
+                      : JSON.stringify(details, null, 2)
+                  }
+                  showLineNumbers={false}
+                  maxHeight="max-h-40"
+                />
+              </div>
             )}
           </div>
         </div>
         {onDismiss && (
-          <button
-            type="button"
+          <IconButton
+            aria-label="Dismiss error"
+            icon={<X size={14} />}
+            size="sm"
             onClick={onDismiss}
-            className="text-xs font-medium text-red-700 dark:text-red-300 hover:underline shrink-0"
-          >
-            Dismiss
-          </button>
+          />
         )}
       </div>
     </div>

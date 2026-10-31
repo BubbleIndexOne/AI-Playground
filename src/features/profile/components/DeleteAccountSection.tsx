@@ -1,7 +1,13 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
 import { ErrorBanner } from '../../../shared/components/ErrorBanner';
+import {
+  Button,
+  Card,
+  ConfirmDialog,
+  FormField,
+  Input,
+} from '../../../shared/ui';
 import { useProfileMutations } from '../hooks/useProfile';
 
 export function DeleteAccountSection() {
@@ -23,33 +29,34 @@ export function DeleteAccountSection() {
   };
 
   return (
-    <div className="rounded-xl border border-red-200 dark:border-red-900/50 bg-white dark:bg-slate-900 p-6 space-y-4">
-      <div className="flex items-start justify-between gap-4">
-        <div className="space-y-1">
-          <h2 className="text-base font-semibold text-red-700 dark:text-red-400">
-            Delete Account
+    <Card padding="lg" className="border-danger/30">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="space-y-0.5">
+          <h2 className="text-[15px] font-semibold text-danger">
+            Delete account
           </h2>
-          <p className="text-xs text-slate-600 dark:text-slate-400">
-            Permanently delete your account via DELETE /auth/me with password confirmation.
+          <p className="text-[12px] text-secondary">
+            Permanently delete your account and remove access to your workspace.
           </p>
         </div>
-        <button
+        <Button
           type="button"
+          variant="danger"
+          size="sm"
           onClick={() => {
             setPassword('');
             setDialogOpen(true);
           }}
-          className="px-4 py-2 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors whitespace-nowrap shrink-0"
         >
-          Delete Account
-        </button>
+          Delete account
+        </Button>
       </div>
 
       <ConfirmDialog
         open={dialogOpen}
         title="Delete your account?"
-        description="This action permanently deletes your account. Enter your password to confirm."
-        confirmLabel="Delete Account"
+        description="This permanently deletes your account and cannot be undone. Enter your password to confirm."
+        confirmLabel="Delete account"
         isDestructive
         isPending={deleteAccountMutation.isPending}
         onConfirm={handleConfirmDelete}
@@ -59,21 +66,22 @@ export function DeleteAccountSection() {
           {deleteAccountMutation.error && (
             <ErrorBanner error={deleteAccountMutation.error} />
           )}
-          <div className="space-y-1.5">
-            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
-              Confirm password
-            </label>
-            <input
+          <FormField
+            label="Confirm password"
+            htmlFor="delete-acc-password"
+            required
+          >
+            <Input
+              id="delete-acc-password"
               type="password"
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter your password"
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm text-slate-900 dark:text-slate-100"
             />
-          </div>
+          </FormField>
         </div>
       </ConfirmDialog>
-    </div>
+    </Card>
   );
 }

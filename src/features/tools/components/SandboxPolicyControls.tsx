@@ -1,4 +1,7 @@
+import { ChevronDown, ChevronRight, Shield } from 'lucide-react';
+import { useState } from 'react';
 import { SandboxPolicy } from '../../../sandbox/protocol';
+import { Checkbox, FormField, Input, Switch } from '../../../shared/ui';
 import { toolsService } from '../services/tools.service';
 
 interface SandboxPolicyControlsProps {
@@ -10,145 +13,155 @@ export function SandboxPolicyControls({
   policy,
   onChange,
 }: SandboxPolicyControlsProps) {
+  const [expanded, setExpanded] = useState(false);
   const canMeasureMemory = toolsService.canMeasureMemory();
   const domainStr = policy.allowedDomains.join(', ');
 
   return (
-    <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/60 p-4 space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h4 className="text-xs font-semibold text-slate-900 dark:text-slate-100">
-          Sandbox Policy Controls
-        </h4>
-        <span className="text-xs text-slate-500 dark:text-slate-400">
-          Isolated iframe (sandbox=&quot;allow-scripts&quot;) + Blob Module Worker
-        </span>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <div className="space-y-1.5">
-          <label className="inline-flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-300 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={policy.networkEnabled}
-              onChange={(e) =>
-                onChange({ ...policy, networkEnabled: e.target.checked })
-              }
-              className="rounded border-slate-300 dark:border-slate-700"
-            />
-            Allow Outbound Network
-          </label>
-          <input
-            type="text"
-            disabled={!policy.networkEnabled}
-            value={domainStr}
-            onChange={(e) =>
-              onChange({
-                ...policy,
-                allowedDomains: e.target.value
-                  .split(',')
-                  .map((d) => d.trim())
-                  .filter(Boolean),
-              })
-            }
-            placeholder="Domain allowlist: api.example.com"
-            className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-xs font-mono disabled:opacity-50"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <span className="block text-xs font-medium text-slate-700 dark:text-slate-300">
-            Storage & Globals Access
+    <div className="rounded-xl border border-subtle bg-app overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setExpanded((prev) => !prev)}
+        className="w-full px-4 py-3 flex items-center justify-between gap-3 text-left hover:bg-hover transition-colors cursor-pointer"
+      >
+        <div className="flex items-center gap-2">
+          <Shield size={15} className="text-secondary" />
+          <span className="text-[13px] font-medium text-primary">
+            Sandbox policy
           </span>
-          <div className="flex flex-col gap-1.5">
-            <label className="inline-flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={policy.allowIndexedDb}
-                onChange={(e) =>
-                  onChange({ ...policy, allowIndexedDb: e.target.checked })
+          <span className="text-[12px] text-muted font-mono">
+            {policy.timeoutMs}ms · {(policy.maxOutputBytes / 1024).toFixed(0)}KB ·{' '}
+            {policy.networkEnabled ? 'Network allowlist' : 'Network off'}
+          </span>
+        </div>
+        {expanded ? (
+          <ChevronDown size={15} className="text-muted" />
+        ) : (
+          <ChevronRight size={15} className="text-muted" />
+        )}
+      </button>
+
+      {expanded && (
+        <div className="p-4 border-t border-subtle space-y-4 bg-card">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Switch
+                checked={policy.networkEnabled}
+                onChange={(checked) =>
+                  onChange({ ...policy, networkEnabled: checked })
                 }
-                className="rounded border-slate-300 dark:border-slate-700"
+                label="Allow outbound network"
               />
-              Allow IndexedDB (storage:indexeddb)
-            </label>
-            <label className="inline-flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={policy.allowCaches}
+              <Input
+                type="text"
+                mono
+                disabled={!policy.networkEnabled}
+                value={domainStr}
                 onChange={(e) =>
-                  onChange({ ...policy, allowCaches: e.target.checked })
+                  onChange({
+                    ...policy,
+                    allowedDomains: e.target.value
+                      .split(',')
+                      .map((d) => d.trim())
+                      .filter(Boolean),
+                  })
                 }
-                className="rounded border-slate-300 dark:border-slate-700"
+                placeholder="Allowed domains: api.example.com"
               />
-              Allow Cache Storage (storage:caches)
-            </label>
+            </div>
+
+            <div className="space-y-2">
+              <span className="block text-[12px] font-medium text-secondary">
+                Browser storage APIs
+              </span>
+              <div className="flex flex-col gap-2">
+                <Checkbox
+                  checked={policy.allowIndexedDb}
+                  onChange={(checked) =>
+                    onChange({ ...policy, allowIndexedDb: checked })
+                  }
+                  label="Allow IndexedDB"
+                />
+                <Checkbox
+                  checked={policy.allowCaches}
+                  onChange={(checked) =>
+                    onChange({ ...policy, allowCaches: checked })
+                  }
+                  label="Allow Cache Storage"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-subtle">
+            <FormField
+              label="Timeout (ms)"
+              hint="Hard wall-clock limit"
+            >
+              <Input
+                type="number"
+                mono
+                min={100}
+                max={60000}
+                step={100}
+                value={policy.timeoutMs}
+                onChange={(e) =>
+                  onChange({
+                    ...policy,
+                    timeoutMs: Math.max(100, Number(e.target.value) || 5000),
+                  })
+                }
+              />
+            </FormField>
+
+            <FormField
+              label="Max output (bytes)"
+              hint="Rejects larger payloads"
+            >
+              <Input
+                type="number"
+                mono
+                min={256}
+                max={1048576}
+                step={1024}
+                value={policy.maxOutputBytes}
+                onChange={(e) =>
+                  onChange({
+                    ...policy,
+                    maxOutputBytes: Math.max(
+                      256,
+                      Number(e.target.value) || 65536
+                    ),
+                  })
+                }
+              />
+            </FormField>
+
+            <FormField
+              label="Memory budget (MB)"
+              hint={
+                canMeasureMemory
+                  ? 'Measured in browser'
+                  : 'Cannot be measured in this browser'
+              }
+            >
+              <Input
+                type="number"
+                mono
+                min={8}
+                max={1024}
+                value={policy.memoryBudgetMb}
+                onChange={(e) =>
+                  onChange({
+                    ...policy,
+                    memoryBudgetMb: Math.max(8, Number(e.target.value) || 64),
+                  })
+                }
+              />
+            </FormField>
           </div>
         </div>
-
-        <div className="space-y-1">
-          <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
-            Memory Budget (MB)
-          </label>
-          <input
-            type="number"
-            min={8}
-            max={1024}
-            value={policy.memoryBudgetMb}
-            onChange={(e) =>
-              onChange({
-                ...policy,
-                memoryBudgetMb: Math.max(8, Number(e.target.value) || 64),
-              })
-            }
-            className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-xs font-mono"
-          />
-          <p className="text-[11px] text-slate-500 dark:text-slate-400">
-            {canMeasureMemory
-              ? 'Measured via performance.measureUserAgentSpecificMemory().'
-              : 'Browser cannot measure memory here (requires crossOriginIsolated); budget is not enforced in this browser.'}
-          </p>
-        </div>
-
-        <div className="space-y-1">
-          <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
-            Wall-Clock Timeout (ms)
-          </label>
-          <input
-            type="number"
-            min={100}
-            max={60000}
-            step={100}
-            value={policy.timeoutMs}
-            onChange={(e) =>
-              onChange({
-                ...policy,
-                timeoutMs: Math.max(100, Number(e.target.value) || 5000),
-              })
-            }
-            className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-xs font-mono"
-          />
-        </div>
-
-        <div className="space-y-1">
-          <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
-            Max Output Size (bytes)
-          </label>
-          <input
-            type="number"
-            min={256}
-            max={1048576}
-            step={1024}
-            value={policy.maxOutputBytes}
-            onChange={(e) =>
-              onChange({
-                ...policy,
-                maxOutputBytes: Math.max(256, Number(e.target.value) || 65536),
-              })
-            }
-            className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-xs font-mono"
-          />
-        </div>
-      </div>
+      )}
     </div>
   );
 }

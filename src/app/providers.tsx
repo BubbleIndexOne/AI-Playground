@@ -1,5 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactNode, useEffect } from 'react';
+import {
+  applyThemePreference,
+  getThemePreference,
+  ToastViewport,
+} from '../shared/ui';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -13,17 +18,21 @@ const queryClient = new QueryClient({
 
 export function AppProviders({ children }: { readonly children: ReactNode }) {
   useEffect(() => {
+    applyThemePreference(getThemePreference());
     const media = window.matchMedia('(prefers-color-scheme: dark)');
-    const applySystemTheme = (isDark: boolean) => {
-      document.documentElement.classList.toggle('dark', isDark);
+    const listener = () => {
+      if (getThemePreference() === 'system') {
+        applyThemePreference('system');
+      }
     };
-    applySystemTheme(media.matches);
-    const listener = (e: MediaQueryListEvent) => applySystemTheme(e.matches);
     media.addEventListener('change', listener);
     return () => media.removeEventListener('change', listener);
   }, []);
 
   return (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    <QueryClientProvider client={queryClient}>
+      {children}
+      <ToastViewport />
+    </QueryClientProvider>
   );
 }

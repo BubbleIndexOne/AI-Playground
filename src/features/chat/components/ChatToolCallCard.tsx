@@ -1,4 +1,14 @@
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Loader2,
+  Wrench,
+  XCircle,
+} from 'lucide-react';
 import { useState } from 'react';
+import { CodeBlock } from '../../../shared/ui';
 import { ChatToolCallRecord } from '../../../storage/interfaces/ChatRepository';
 
 interface ChatToolCallCardProps {
@@ -6,71 +16,74 @@ interface ChatToolCallCardProps {
 }
 
 export function ChatToolCallCard({ toolCall }: ChatToolCallCardProps) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
+
+  const statusIcon =
+    toolCall.status === 'completed' ? (
+      <CheckCircle2 size={14} className="text-success shrink-0" />
+    ) : toolCall.status === 'unavailable' ? (
+      <AlertTriangle size={14} className="text-warning shrink-0" />
+    ) : toolCall.status === 'failed' ? (
+      <XCircle size={14} className="text-danger shrink-0" />
+    ) : (
+      <Loader2 size={14} className="text-info animate-spin shrink-0" />
+    );
 
   return (
-    <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-3 text-xs space-y-2">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span className="font-mono font-semibold text-slate-900 dark:text-slate-100">
-            Tool Call: {toolCall.toolName}
-          </span>
-          <span aria-hidden="true">·</span>
-          <span
-            className={
-              toolCall.status === 'completed'
-                ? 'text-emerald-600 dark:text-emerald-400 font-medium'
-                : toolCall.status === 'unavailable'
-                  ? 'text-amber-600 dark:text-amber-400 font-medium'
-                  : toolCall.status === 'failed'
-                    ? 'text-red-600 dark:text-red-400 font-medium'
-                    : 'text-slate-500'
-            }
-          >
-            {toolCall.status}
+    <div className="rounded-lg border border-subtle bg-card overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setExpanded((prev) => !prev)}
+        className="w-full px-3 py-2 flex items-center justify-between gap-3 text-left hover:bg-hover transition-colors cursor-pointer"
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          {statusIcon}
+          <Wrench size={13} className="text-muted shrink-0" />
+          <span className="font-mono text-[12px] font-medium text-primary truncate">
+            {toolCall.toolName}
           </span>
           {toolCall.durationMs !== undefined && (
-            <>
-              <span aria-hidden="true">·</span>
-              <span className="font-mono tabular-nums text-slate-500">
-                {toolCall.durationMs} ms
-              </span>
-            </>
+            <span className="font-mono text-[11px] text-muted tabular-nums">
+              {toolCall.durationMs} ms
+            </span>
           )}
         </div>
-
-        <button
-          type="button"
-          onClick={() => setExpanded(!expanded)}
-          className="text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 underline"
-        >
-          {expanded ? 'Collapse' : 'Inspect'}
-        </button>
-      </div>
+        {expanded ? (
+          <ChevronDown size={14} className="text-muted shrink-0" />
+        ) : (
+          <ChevronRight size={14} className="text-muted shrink-0" />
+        )}
+      </button>
 
       {expanded && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-1">
+        <div className="p-3 border-t border-subtle bg-app grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="space-y-1">
-            <span className="text-[11px] font-medium text-slate-500">
-              Inputs
+            <span className="text-[11px] font-medium text-secondary">
+              Input JSON
             </span>
-            <pre className="p-2 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-mono overflow-x-auto max-h-36">
-              {JSON.stringify(toolCall.input ?? {}, null, 2)}
-            </pre>
+            <CodeBlock
+              code={JSON.stringify(toolCall.input ?? {}, null, 2)}
+              showLineNumbers={false}
+              maxHeight="max-h-40"
+            />
           </div>
           <div className="space-y-1">
-            <span className="text-[11px] font-medium text-slate-500">
-              {toolCall.error ? 'Error / Output' : 'Output'}
+            <span className="text-[11px] font-medium text-secondary">
+              {toolCall.error ? 'Error / Output' : 'Output JSON'}
             </span>
-            <pre className="p-2 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 font-mono overflow-x-auto max-h-36">
-              {toolCall.error
-                ? `${toolCall.error}${
-                    toolCall.output
-                      ? `\n${JSON.stringify(toolCall.output, null, 2)}`
-                      : ''
-                  }`
-                : JSON.stringify(toolCall.output ?? null, null, 2)}
-            </pre>
+            <CodeBlock
+              code={
+                toolCall.error
+                  ? JSON.stringify(
+                      { error: toolCall.error, output: toolCall.output },
+                      null,
+                      2
+                    )
+                  : JSON.stringify(toolCall.output ?? null, null, 2)
+              }
+              showLineNumbers={false}
+              maxHeight="max-h-40"
+            />
           </div>
         </div>
       )}

@@ -1,6 +1,17 @@
+import { Activity, KeyRound, Monitor, Moon, Sun } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { env } from '../config/env';
 import { ErrorBanner } from '../shared/components/ErrorBanner';
 import { useHealthCheckMutation } from '../shared/hooks/useHealthCheck';
+import {
+  applyThemePreference,
+  Button,
+  CodeBlock,
+  Dialog,
+  getThemePreference,
+  subscribeThemePreference,
+  ThemePreference,
+} from '../shared/ui';
 
 interface SettingsModalProps {
   readonly open: boolean;
@@ -16,88 +27,127 @@ export function SettingsModal({
   hasAdminKey,
 }: SettingsModalProps) {
   const healthMutation = useHealthCheckMutation();
+  const [themePref, setThemePref] = useState<ThemePreference>(
+    getThemePreference()
+  );
 
-  if (!open) return null;
+  useEffect(() => {
+    return subscribeThemePreference(setThemePref);
+  }, []);
+
+  const themeOptions: {
+    readonly id: ThemePreference;
+    readonly label: string;
+    readonly icon: typeof Monitor;
+  }[] = [
+    { id: 'system', label: 'System', icon: Monitor },
+    { id: 'light', label: 'Light', icon: Sun },
+    { id: 'dark', label: 'Dark', icon: Moon },
+  ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-xs p-4">
-      <div className="w-full max-w-lg rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-lg space-y-5">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-            Workspace Settings
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-xs font-medium text-slate-500 hover:text-slate-900 dark:hover:text-slate-100"
-          >
-            Close
-          </button>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title="Settings"
+      description="Appearance, API connection, and administrative session controls."
+      maxWidth="lg"
+    >
+      <div className="space-y-6">
+        {/* Theme selector */}
+        <div className="space-y-2">
+          <span className="block text-[13px] font-medium text-primary">
+            Appearance
+          </span>
+          <div className="grid grid-cols-3 gap-2">
+            {themeOptions.map((opt) => {
+              const Icon = opt.icon;
+              const active = themePref === opt.id;
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => applyThemePreference(opt.id)}
+                  className={`flex items-center justify-center gap-2 h-9 rounded-lg border text-[13px] font-medium transition-colors duration-150 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+                    active
+                      ? 'border-accent bg-accent-tint text-primary'
+                      : 'border-subtle bg-app text-secondary hover:text-primary hover:bg-hover'
+                  }`}
+                >
+                  <Icon size={15} />
+                  <span>{opt.label}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
-        <div className="space-y-2 text-xs text-slate-600 dark:text-slate-400">
-          <p>
-            API Base URL (<code className="font-mono">VITE_API_BASE_URL</code>):{' '}
-            <code className="font-mono text-slate-900 dark:text-slate-100">
-              {env.apiBaseUrl || '(relative to origin)'}
-            </code>
-          </p>
-        </div>
-
-        <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-3">
+        {/* Health check */}
+        <div className="pt-4 border-t border-subtle space-y-3">
           <div className="flex items-center justify-between gap-4">
             <div className="space-y-0.5">
-              <h3 className="text-xs font-semibold text-slate-900 dark:text-slate-100">
-                On-Demand Backend Health Check
-              </h3>
-              <p className="text-xs text-slate-500">
-                Calls GET /health and displays the raw response.
+              <span className="block text-[13px] font-medium text-primary">
+                Service health check
+              </span>
+              <p className="text-[12px] text-secondary">
+                Endpoint:{' '}
+                <code className="font-mono text-primary">
+                  {env.apiBaseUrl || 'Origin'}/health
+                </code>
               </p>
             </div>
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="md"
+              icon={<Activity size={15} />}
+              loading={healthMutation.isPending}
               onClick={() => healthMutation.mutate()}
-              disabled={healthMutation.isPending}
-              className="px-3.5 py-2 text-xs font-medium text-white bg-slate-900 dark:bg-slate-100 dark:text-slate-900 rounded-lg whitespace-nowrap shrink-0"
             >
-              {healthMutation.isPending ? 'Checking...' : 'Run health check'}
-            </button>
+              Run health check
+            </Button>
           </div>
 
           {healthMutation.error && (
-            <ErrorBanner error={healthMutation.error} title="Health check failed" />
+            <ErrorBanner
+              error={healthMutation.error}
+              title="Health check failed"
+            />
           )}
 
           {healthMutation.data !== undefined && (
-            <pre className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-3 text-xs font-mono overflow-x-auto">
-              {JSON.stringify(healthMutation.data, null, 2)}
-            </pre>
+            <CodeBlock
+              code={JSON.stringify(healthMutation.data, null, 2)}
+              showLineNumbers={false}
+              maxHeight="max-h-48"
+            />
           )}
         </div>
 
-        <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-4">
+        {/* Admin key */}
+        <div className="pt-4 border-t border-subtle flex items-center justify-between gap-4">
           <div className="space-y-0.5">
-            <h3 className="text-xs font-semibold text-slate-900 dark:text-slate-100">
-              Admin Session Key (x-admin-key)
-            </h3>
-            <p className="text-xs text-slate-500">
+            <span className="block text-[13px] font-medium text-primary">
+              Admin session key
+            </span>
+            <p className="text-[12px] text-secondary">
               {hasAdminKey
-                ? 'Admin key is currently active in memory.'
-                : 'Enter an admin key to reveal the Admin navigation item.'}
+                ? 'Active for this browser session.'
+                : 'Enter an admin key to review submitted tools.'}
             </p>
           </div>
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="md"
+            icon={<KeyRound size={15} />}
             onClick={() => {
               onClose();
               onOpenAdminKeyDialog();
             }}
-            className="px-3.5 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 rounded-lg whitespace-nowrap shrink-0"
           >
-            {hasAdminKey ? 'Update Admin Key' : 'Enter Admin Key'}
-          </button>
+            {hasAdminKey ? 'Change admin key' : 'Enter admin key'}
+          </Button>
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 }

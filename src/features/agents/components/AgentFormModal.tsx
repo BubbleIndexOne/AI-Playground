@@ -1,5 +1,17 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { Search } from 'lucide-react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { ConnectorType } from '../../../domain/enums';
+import {
+  Button,
+  Checkbox,
+  Drawer,
+  FormField,
+  Input,
+  Select,
+  Textarea,
+  toast,
+  ToolStatusBadge,
+} from '../../../shared/ui';
 import {
   AgentRecord,
   AttachedAgentTool,
@@ -34,6 +46,7 @@ export function AgentFormModal({
   const [attachedConnectors, setAttachedConnectors] = useState<ConnectorType[]>(
     []
   );
+  const [toolSearch, setToolSearch] = useState('');
 
   useEffect(() => {
     if (!open) return;
@@ -54,9 +67,19 @@ export function AgentFormModal({
       setAttachedTools([]);
       setAttachedConnectors([]);
     }
+    setToolSearch('');
   }, [open, initialAgent, presets, credentials]);
 
-  if (!open) return null;
+  const filteredTools = useMemo(() => {
+    const list = availableTools ?? [];
+    if (!toolSearch.trim()) return list;
+    const q = toolSearch.toLowerCase();
+    return list.filter(
+      (t) =>
+        t.name.toLowerCase().includes(q) ||
+        (t.description ?? '').toLowerCase().includes(q)
+    );
+  }, [availableTools, toolSearch]);
 
   const toggleTool = (toolId: string) => {
     setAttachedTools((prev) =>
@@ -85,193 +108,223 @@ export function AgentFormModal({
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    await saveAgentMutation.mutateAsync({
-      id: initialAgent?.id,
-      name: name.trim(),
-      description: description.trim(),
-      systemPrompt,
-      modelPresetId,
-      credentialId,
-      attachedTools,
-      attachedConnectors,
-    });
-    onClose();
+    try {
+      await saveAgentMutation.mutateAsync({
+        id: initialAgent?.id,
+        name: name.trim(),
+        description: description.trim(),
+        systemPrompt,
+        modelPresetId,
+        credentialId,
+        attachedTools,
+        attachedConnectors,
+      });
+      toast.success(initialAgent ? 'Agent updated' : 'Agent created');
+      onClose();
+    } catch (err) {
+      toast.error(
+        'Could not save agent',
+        err instanceof Error ? err.message : undefined
+      );
+    }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-xs p-4 overflow-y-auto">
+    <Drawer
+      open={open}
+      onClose={onClose}
+      title={initialAgent ? 'Edit agent' : 'Create agent'}
+      description="Configure identity, instructions, model parameters, and attached capabilities."
+      width="xl"
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            type="submit"
+            form="agent-drawer-form"
+            loading={saveAgentMutation.isPending}
+          >
+            {initialAgent ? 'Save changes' : 'Create agent'}
+          </Button>
+        </>
+      }
+    >
       <form
+        id="agent-drawer-form"
         onSubmit={handleSubmit}
-        className="w-full max-w-2xl rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-lg space-y-4 my-8"
+        className="space-y-6"
       >
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-          {initialAgent ? 'Edit Agent' : 'Create Agent'}
-        </h2>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-1">
-            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
-              Agent Name *
-            </label>
-            <input
-              type="text"
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Research Assistant"
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
-            />
+        {/* Section 1: Identity */}
+        <section className="space-y-4">
+          <h3 className="text-[14px] font-semibold text-primary">Identity</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <FormField label="Name" required>
+              <Input
+                type="text"
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Research assistant"
+              />
+            </FormField>
+            <FormField label="Description">
+              <Input
+                type="text"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Summarizes documents and runs tools"
+              />
+            </FormField>
           </div>
-          <div className="space-y-1">
-            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
-              Description
-            </label>
-            <input
-              type="text"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Optional description"
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
-            />
-          </div>
-        </div>
+        </section>
 
-        <div className="space-y-1">
-          <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
-            System Prompt *
-          </label>
-          <textarea
-            rows={4}
+        {/* Section 2: System prompt */}
+        <section className="space-y-3 pt-4 border-t border-subtle">
+          <FormField
+            label="System prompt"
             required
-            value={systemPrompt}
-            onChange={(e) => setSystemPrompt(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 p-3 text-xs font-mono"
-          />
-        </div>
+            rightLabel={
+              <span className="font-mono tabular-nums">
+                {systemPrompt.length} chars
+              </span>
+            }
+          >
+            <Textarea
+              mono
+              autoGrow
+              rows={5}
+              required
+              value={systemPrompt}
+              onChange={(e) => setSystemPrompt(e.target.value)}
+              placeholder="Write instructions for how the agent should reason and respond..."
+            />
+          </FormField>
+        </section>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-1">
-            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
-              Model Preset
-            </label>
-            <select
-              value={modelPresetId}
-              onChange={(e) => setModelPresetId(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-xs"
+        {/* Section 3: Model */}
+        <section className="space-y-4 pt-4 border-t border-subtle">
+          <h3 className="text-[14px] font-semibold text-primary">Model</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <FormField
+              label="Model preset"
+              hint="Defines provider, model ID, and sampling parameters."
             >
-              <option value="">Select model preset...</option>
-              {(presets ?? []).map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name} ({p.provider} / {p.model_id})
-                </option>
-              ))}
-            </select>
+              <Select
+                value={modelPresetId}
+                onChange={(e) => setModelPresetId(e.target.value)}
+              >
+                <option value="">Default model settings</option>
+                {(presets ?? []).map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} ({p.provider} · {p.model_id})
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+
+            <FormField
+              label="API key"
+              hint="Used when streaming responses directly from your browser."
+            >
+              <Select
+                value={credentialId}
+                onChange={(e) => setCredentialId(e.target.value)}
+              >
+                <option value="">Select a saved key...</option>
+                {(credentials ?? []).map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.label} ({c.provider})
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+          </div>
+        </section>
+
+        {/* Section 4: Tools */}
+        <section className="space-y-3 pt-4 border-t border-subtle">
+          <div className="flex items-center justify-between gap-4">
+            <h3 className="text-[14px] font-semibold text-primary">
+              Tools ({attachedTools.length} selected)
+            </h3>
+            <div className="w-56">
+              <Input
+                type="search"
+                leftIcon={<Search size={14} />}
+                value={toolSearch}
+                onChange={(e) => setToolSearch(e.target.value)}
+                placeholder="Filter tools..."
+              />
+            </div>
           </div>
 
-          <div className="space-y-1">
-            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
-              BYOK Credential
-            </label>
-            <select
-              value={credentialId}
-              onChange={(e) => setCredentialId(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-xs"
-            >
-              <option value="">Select API key credential...</option>
-              {(credentials ?? []).map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.label} ({c.provider})
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <span className="block text-xs font-semibold text-slate-900 dark:text-slate-100">
-            Attached Tools (optional version pinning)
-          </span>
-          <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-800 divide-y divide-slate-200 dark:divide-slate-800">
-            {(availableTools ?? []).length === 0 ? (
-              <p className="p-3 text-xs text-slate-500">
-                No tools available yet.
+          <div className="max-h-56 overflow-y-auto rounded-xl border border-subtle bg-app divide-y divide-subtle">
+            {filteredTools.length === 0 ? (
+              <p className="p-4 text-[13px] text-secondary text-center">
+                No matching tools found.
               </p>
             ) : (
-              (availableTools ?? []).map((t) => {
+              filteredTools.map((t) => {
                 const attached = attachedTools.find((a) => a.toolId === t.id);
                 return (
                   <div
                     key={t.id}
-                    className="p-2.5 flex items-center justify-between gap-3 text-xs"
+                    className="px-3.5 py-2.5 flex items-center justify-between gap-3"
                   >
-                    <label className="inline-flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(attached)}
-                        onChange={() => toggleTool(t.id)}
-                        className="rounded border-slate-300 dark:border-slate-700"
-                      />
-                      <span className="font-medium text-slate-900 dark:text-slate-100">
-                        {t.name}
-                      </span>
-                      <span className="font-mono text-slate-500">({t.type})</span>
-                    </label>
+                    <Checkbox
+                      checked={Boolean(attached)}
+                      onChange={() => toggleTool(t.id)}
+                      label={
+                        <span className="inline-flex items-center gap-2">
+                          <span>{t.name}</span>
+                          <span className="font-mono text-[11px] text-muted">
+                            {t.type}
+                          </span>
+                          <ToolStatusBadge status={t.status} />
+                        </span>
+                      }
+                      description={t.description ?? undefined}
+                    />
                     {attached && (
-                      <input
-                        type="number"
-                        min={1}
-                        value={attached.pinnedVersion ?? ''}
-                        onChange={(e) => updatePinnedVersion(t.id, e.target.value)}
-                        placeholder="Pin version #"
-                        className="w-28 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 py-1 text-xs font-mono"
-                      />
+                      <div className="w-28 shrink-0">
+                        <Input
+                          type="number"
+                          mono
+                          min={1}
+                          value={attached.pinnedVersion ?? ''}
+                          onChange={(e) =>
+                            updatePinnedVersion(t.id, e.target.value)
+                          }
+                          placeholder="Latest"
+                          title="Optional pinned version number"
+                        />
+                      </div>
                     )}
                   </div>
                 );
               })
             )}
           </div>
-        </div>
+        </section>
 
-        <div className="space-y-2">
-          <span className="block text-xs font-semibold text-slate-900 dark:text-slate-100">
-            Attached Connectors
-          </span>
-          <div className="flex items-center gap-4 text-xs">
+        {/* Section 5: Connectors */}
+        <section className="space-y-3 pt-4 border-t border-subtle">
+          <h3 className="text-[14px] font-semibold text-primary">Connectors</h3>
+          <div className="flex flex-wrap items-center gap-6">
             {[ConnectorType.Postgres, ConnectorType.Slack].map((connType) => (
-              <label
+              <Checkbox
                 key={connType}
-                className="inline-flex items-center gap-2 cursor-pointer"
-              >
-                <input
-                  type="checkbox"
-                  checked={attachedConnectors.includes(connType)}
-                  onChange={() => toggleConnector(connType)}
-                  className="rounded border-slate-300 dark:border-slate-700"
-                />
-                <span className="capitalize">{connType}</span>
-              </label>
+                checked={attachedConnectors.includes(connType)}
+                onChange={() => toggleConnector(connType)}
+                label={<span className="capitalize">{connType}</span>}
+              />
             ))}
           </div>
-        </div>
-
-        <div className="flex justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 rounded-lg"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={saveAgentMutation.isPending}
-            className="px-4 py-2 text-xs font-medium text-white bg-slate-900 dark:bg-slate-100 dark:text-slate-900 rounded-lg"
-          >
-            {saveAgentMutation.isPending ? 'Saving...' : 'Save Agent'}
-          </button>
-        </div>
+        </section>
       </form>
-    </div>
+    </Drawer>
   );
 }

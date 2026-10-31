@@ -5,13 +5,25 @@ import {
 } from '../../../api/types/connectors.types';
 import { ConnectorType } from '../../../domain/enums';
 import { ErrorBanner } from '../../../shared/components/ErrorBanner';
+import {
+  Button,
+  CodeBlock,
+  FormField,
+  Input,
+  Switch,
+  toast,
+} from '../../../shared/ui';
 import { useConnectorMutations } from '../hooks/useConnectors';
 
 interface SlackConnectorFormProps {
   readonly isConfigured: boolean;
+  readonly onSaved?: () => void;
 }
 
-export function SlackConnectorForm({ isConfigured }: SlackConnectorFormProps) {
+export function SlackConnectorForm({
+  isConfigured,
+  onSaved,
+}: SlackConnectorFormProps) {
   const { saveMutation, testMutation } = useConnectorMutations();
 
   const [botToken, setBotToken] = useState('');
@@ -21,7 +33,6 @@ export function SlackConnectorForm({ isConfigured }: SlackConnectorFormProps) {
   const [verifyBeforeSave, setVerifyBeforeSave] = useState(true);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<ConnectorTestResponse | null>(null);
-  const [savedNotice, setSavedNotice] = useState(false);
 
   const clearForm = () => {
     setBotToken('');
@@ -33,7 +44,6 @@ export function SlackConnectorForm({ isConfigured }: SlackConnectorFormProps) {
   const handleSave = async (e: FormEvent) => {
     e.preventDefault();
     setValidationError(null);
-    setSavedNotice(false);
 
     const parsed = SlackCredentialsSchema.safeParse({
       bot_token: botToken.trim(),
@@ -53,7 +63,8 @@ export function SlackConnectorForm({ isConfigured }: SlackConnectorFormProps) {
       verify: verifyBeforeSave,
     });
     clearForm();
-    setSavedNotice(true);
+    toast.success('Slack configured', 'Credentials were saved and cleared from the form.');
+    onSaved?.();
   };
 
   const handleTestForm = async () => {
@@ -86,132 +97,104 @@ export function SlackConnectorForm({ isConfigured }: SlackConnectorFormProps) {
   };
 
   return (
-    <form
-      onSubmit={handleSave}
-      className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 space-y-4"
-    >
-      <div className="flex items-center justify-between gap-4">
-        <div className="space-y-0.5">
-          <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-            Slack Credentials
-          </h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            PUT /connectors/slack · Form clears automatically after saving.
-          </p>
-        </div>
-        {isConfigured && (
-          <button
-            type="button"
-            onClick={handleTestStored}
-            disabled={testMutation.isPending}
-            className="px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors whitespace-nowrap shrink-0"
-          >
-            Test Stored Credentials
-          </button>
-        )}
-      </div>
-
+    <form onSubmit={handleSave} className="space-y-4">
       {validationError && <ErrorBanner error={new Error(validationError)} />}
       {saveMutation.error && <ErrorBanner error={saveMutation.error} title="Save failed" />}
       {testMutation.error && <ErrorBanner error={testMutation.error} title="Test failed" />}
 
       {testResult && (
-        <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-3 text-xs font-mono overflow-x-auto">
-          {JSON.stringify(testResult, null, 2)}
+        <div className="space-y-1.5">
+          <span className="text-[12px] font-medium text-secondary">
+            Connection test result
+          </span>
+          <CodeBlock code={JSON.stringify(testResult, null, 2)} maxHeight="160px" />
         </div>
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="space-y-1.5">
-          <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
-            Bot Token *
-          </label>
-          <input
+        <FormField label="Bot token" htmlFor="slack-bot-token" required>
+          <Input
+            id="slack-bot-token"
             type="password"
             required
             autoComplete="off"
             value={botToken}
             onChange={(e) => setBotToken(e.target.value)}
-            placeholder="xoxb-..."
-            className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm font-mono text-slate-900 dark:text-slate-100"
+            placeholder="xoxb-…"
+            mono
           />
-        </div>
+        </FormField>
 
-        <div className="space-y-1.5">
-          <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
-            Signing Secret
-          </label>
-          <input
+        <FormField label="Signing secret" htmlFor="slack-signing-secret">
+          <Input
+            id="slack-signing-secret"
             type="password"
             autoComplete="off"
             value={signingSecret}
             onChange={(e) => setSigningSecret(e.target.value)}
             placeholder="Optional signing secret"
-            className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm font-mono text-slate-900 dark:text-slate-100"
+            mono
           />
-        </div>
+        </FormField>
 
-        <div className="space-y-1.5">
-          <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
-            Default Channel
-          </label>
-          <input
+        <FormField label="Default channel" htmlFor="slack-channel">
+          <Input
+            id="slack-channel"
             type="text"
             value={defaultChannel}
             onChange={(e) => setDefaultChannel(e.target.value)}
             placeholder="#general or C01234567"
-            className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm text-slate-900 dark:text-slate-100"
           />
-        </div>
+        </FormField>
 
-        <div className="space-y-1.5">
-          <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">
-            Team ID
-          </label>
-          <input
+        <FormField label="Team ID" htmlFor="slack-team">
+          <Input
+            id="slack-team"
             type="text"
             value={teamId}
             onChange={(e) => setTeamId(e.target.value)}
             placeholder="T01234567"
-            className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm text-slate-900 dark:text-slate-100"
+            mono
           />
-        </div>
+        </FormField>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
-        <div className="flex items-center gap-6">
-          <label className="inline-flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={verifyBeforeSave}
-              onChange={(e) => setVerifyBeforeSave(e.target.checked)}
-              className="rounded border-slate-300 dark:border-slate-700"
-            />
-            Verify before saving
-          </label>
-          {savedNotice && (
-            <span className="text-xs text-emerald-600 dark:text-emerald-400">
-              Saved and cleared.
-            </span>
-          )}
-        </div>
+      <div className="flex flex-wrap items-center justify-between gap-4 pt-2 border-t border-subtle">
+        <Switch
+          checked={verifyBeforeSave}
+          onChange={setVerifyBeforeSave}
+          label="Verify before saving"
+        />
 
         <div className="flex items-center gap-2">
-          <button
+          {isConfigured && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={handleTestStored}
+              loading={testMutation.isPending}
+            >
+              Test stored
+            </Button>
+          )}
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
             onClick={handleTestForm}
-            disabled={testMutation.isPending}
-            className="px-3.5 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors whitespace-nowrap shrink-0"
+            loading={testMutation.isPending}
           >
-            Test Form Values
-          </button>
-          <button
+            Test connection
+          </Button>
+          <Button
             type="submit"
-            disabled={saveMutation.isPending}
-            className="px-4 py-2 text-xs font-medium text-white bg-slate-900 dark:bg-slate-100 dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-200 rounded-lg transition-colors whitespace-nowrap shrink-0"
+            variant="primary"
+            size="sm"
+            loading={saveMutation.isPending}
           >
-            {saveMutation.isPending ? 'Saving...' : 'Save Slack'}
-          </button>
+            Save credentials
+          </Button>
         </div>
       </div>
     </form>

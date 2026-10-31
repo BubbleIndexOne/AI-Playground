@@ -1,16 +1,41 @@
+import { Archive, Pencil, Plus, Sliders, Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import { ModelPreset } from '../../../api/types/modelPresets.types';
+import { ModelPreset, ModelPresetParams } from '../../../api/types/modelPresets.types';
 import { AI_PROVIDERS } from '../../../domain/providers';
-import { ConfirmDialog } from '../../../shared/components/ConfirmDialog';
-import { EmptyState } from '../../../shared/components/EmptyState';
 import { ErrorBanner } from '../../../shared/components/ErrorBanner';
-import { formatDateTime } from '../../../shared/utils/formatters';
+import {
+  Badge,
+  Button,
+  Card,
+  CardGridSkeleton,
+  ConfirmDialog,
+  EmptyState,
+  Input,
+  KeyValueList,
+  PageHeader,
+  Select,
+  Tooltip,
+  toast,
+} from '../../../shared/ui';
+import { formatDateTime, formatRelativeTime } from '../../../shared/utils/formatters';
 import { ModelPresetFormModal } from '../components/ModelPresetFormModal';
 import {
   useModelPresetDefaultsQuery,
   useModelPresetMutations,
   useModelPresetsQuery,
 } from '../hooks/useModelPresets';
+
+function formatParamsToItems(params: ModelPresetParams | undefined) {
+  if (!params) return [];
+  return Object.entries(params)
+    .filter(([, v]) => v !== undefined && v !== null && v !== '')
+    .map(([key, val]) => ({
+      key,
+      value:
+        typeof val === 'object' ? JSON.stringify(val) : String(val),
+      mono: true,
+    }));
+}
 
 export function ModelPresetsPage() {
   const [providerFilter, setProviderFilter] = useState('');
@@ -33,45 +58,45 @@ export function ModelPresetsPage() {
     if (!confirmAction) return;
     if (confirmAction.mode === 'archive') {
       await archiveMutation.mutateAsync(confirmAction.preset.id);
+      toast.success('Preset archived', `Archived "${confirmAction.preset.name}".`);
     } else {
       await purgeMutation.mutateAsync(confirmAction.preset.id);
+      toast.success('Preset deleted', `Deleted "${confirmAction.preset.name}".`);
     }
     setConfirmAction(null);
   };
 
+  const hasPresets = Boolean(presets && presets.length > 0);
+
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-            Model Presets
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Reusable model parameter configurations with server-hydrated defaults.
-          </p>
-        </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Model Presets"
+        description="Reusable model parameter configurations with server-hydrated defaults."
+        actions={
+          hasPresets ? (
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              onClick={() => {
+                setEditingPreset(null);
+                setModalOpen(true);
+              }}
+            >
+              <Plus className="w-4 h-4" />
+              New preset
+            </Button>
+          ) : undefined
+        }
+      />
 
-        <button
-          type="button"
-          onClick={() => {
-            setEditingPreset(null);
-            setModalOpen(true);
-          }}
-          className="px-4 py-2 text-xs font-medium text-white bg-slate-900 dark:bg-slate-100 dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-200 rounded-lg transition-colors whitespace-nowrap shrink-0"
-        >
-          New Model Preset
-        </button>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
-        <div className="flex items-center gap-2">
-          <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
-            Provider:
-          </label>
-          <select
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="w-48">
+          <Select
+            aria-label="Filter by provider"
             value={providerFilter}
             onChange={(e) => setProviderFilter(e.target.value)}
-            className="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-1.5 text-xs"
           >
             <option value="">All providers</option>
             {AI_PROVIDERS.map((p) => (
@@ -79,19 +104,16 @@ export function ModelPresetsPage() {
                 {p.name}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
 
-        <div className="flex items-center gap-2 flex-1 min-w-[200px]">
-          <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
-            Model ID:
-          </label>
-          <input
-            type="text"
+        <div className="w-64">
+          <Input
+            type="search"
             value={modelIdFilter}
             onChange={(e) => setModelIdFilter(e.target.value)}
-            placeholder="Filter by model_id..."
-            className="w-full max-w-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-1.5 text-xs font-mono"
+            placeholder="Filter by model ID…"
+            mono
           />
         </div>
       </div>
@@ -99,110 +121,119 @@ export function ModelPresetsPage() {
       {error && <ErrorBanner error={error} title="Failed to load model presets" />}
 
       {isLoading ? (
-        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 text-sm text-slate-500">
-          Loading model presets...
-        </div>
+        <CardGridSkeleton count={4} />
       ) : !presets || presets.length === 0 ? (
         <EmptyState
+          icon={<Sliders className="w-5 h-5" />}
           title="No model presets found"
-          description="Create a model preset to configure temperature, topP, reasoning, and tool choice for your agents."
-          actionLabel="Create First Preset"
+          description="Create a model preset to configure sampling, penalties, and output behavior for your agents."
+          actionLabel="Create preset"
           onAction={() => {
             setEditingPreset(null);
             setModalOpen(true);
           }}
         />
       ) : (
-        <div className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {presets.map((preset) => {
             const hydrated = preset.hydrated_params ?? preset.params;
+            const paramItems = formatParamsToItems(hydrated);
+
             return (
-              <div
+              <Card
                 key={preset.id}
-                className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-3"
+                className="flex flex-col justify-between gap-4"
               >
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div className="space-y-1">
-                    <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-                      {preset.name}
-                    </h3>
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                      <span className="font-mono">{preset.provider}</span>
-                      <span aria-hidden="true">·</span>
-                      <span className="font-mono">{preset.model_id}</span>
-                      {preset.is_archived && (
-                        <>
-                          <span aria-hidden="true">·</span>
-                          <span>Archived</span>
-                        </>
-                      )}
-                      {preset.updated_at && (
-                        <>
-                          <span aria-hidden="true">·</span>
-                          <span className="tabular-nums">
-                            Updated {formatDateTime(preset.updated_at)}
-                          </span>
-                        </>
+                <div className="space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-[15px] font-semibold text-primary truncate">
+                          {preset.name}
+                        </h3>
+                        {preset.is_archived && (
+                          <Badge variant="warning">Archived</Badge>
+                        )}
+                      </div>
+                      {preset.description && (
+                        <p className="text-[13px] text-secondary line-clamp-2">
+                          {preset.description}
+                        </p>
                       )}
                     </div>
-                    {preset.description && (
-                      <p className="text-xs text-slate-600 dark:text-slate-300 pt-1">
-                        {preset.description}
-                      </p>
-                    )}
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <Badge variant="neutral" mono>
+                        {preset.provider}
+                      </Badge>
+                      <Badge variant="info" mono>
+                        {preset.model_id}
+                      </Badge>
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
+                  <div className="space-y-1.5 pt-1">
+                    <span className="text-[11px] font-medium text-muted">
+                      Effective parameters
+                    </span>
+                    <KeyValueList items={paramItems} compact />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-2 pt-3 border-t border-subtle">
+                  <span className="text-[11px] text-muted">
+                    {preset.updated_at ? (
+                      <Tooltip content={formatDateTime(preset.updated_at)}>
+                        <span className="underline decoration-dotted cursor-default">
+                          Updated {formatRelativeTime(preset.updated_at)}
+                        </span>
+                      </Tooltip>
+                    ) : (
+                      'Saved'
+                    )}
+                  </span>
+
+                  <div className="flex items-center gap-1.5">
+                    <Button
                       type="button"
+                      variant="secondary"
+                      size="sm"
                       onClick={() => {
                         setEditingPreset(preset);
                         setModalOpen(true);
                       }}
-                      className="px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg"
                     >
+                      <Pencil className="w-3.5 h-3.5" />
                       Edit
-                    </button>
-                    <button
+                    </Button>
+                    {!preset.is_archived && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                          setConfirmAction({ preset, mode: 'archive' })
+                        }
+                      >
+                        <Archive className="w-3.5 h-3.5" />
+                        Archive
+                      </Button>
+                    )}
+                    <Button
                       type="button"
-                      onClick={() =>
-                        setConfirmAction({ preset, mode: 'archive' })
-                      }
-                      className="px-3 py-1.5 text-xs font-medium text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded-lg"
-                    >
-                      Archive
-                    </button>
-                    <button
-                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-danger hover:text-danger"
                       onClick={() =>
                         setConfirmAction({ preset, mode: 'purge' })
                       }
-                      className="px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg"
                     >
-                      Delete Permanently
-                    </button>
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Delete
+                    </Button>
                   </div>
                 </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
-                  <div className="space-y-1">
-                    <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                      Configured Params
-                    </span>
-                    <pre className="rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 text-xs font-mono overflow-x-auto">
-                      {JSON.stringify(preset.params ?? {}, null, 2)}
-                    </pre>
-                  </div>
-                  <div className="space-y-1">
-                    <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                      Hydrated Params (from API)
-                    </span>
-                    <pre className="rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 text-xs font-mono overflow-x-auto">
-                      {JSON.stringify(hydrated ?? {}, null, 2)}
-                    </pre>
-                  </div>
-                </div>
-              </div>
+              </Card>
             );
           })}
         </div>
@@ -219,16 +250,16 @@ export function ModelPresetsPage() {
         open={confirmAction !== null}
         title={
           confirmAction?.mode === 'purge'
-            ? `Permanently delete "${confirmAction.preset.name}"?`
+            ? `Delete "${confirmAction.preset.name}" permanently?`
             : `Archive "${confirmAction?.preset.name ?? ''}"?`
         }
         description={
           confirmAction?.mode === 'purge'
-            ? 'Calls DELETE /model-presets/{id}?purge=true. This cannot be undone.'
-            : 'Calls DELETE /model-presets/{id} (archives by default).'
+            ? 'This permanently removes the model preset and cannot be undone.'
+            : 'Archived presets remain stored but are hidden from active selection.'
         }
         confirmLabel={
-          confirmAction?.mode === 'purge' ? 'Delete Permanently' : 'Archive Preset'
+          confirmAction?.mode === 'purge' ? 'Delete preset' : 'Archive preset'
         }
         isDestructive={confirmAction?.mode === 'purge'}
         isPending={archiveMutation.isPending || purgeMutation.isPending}

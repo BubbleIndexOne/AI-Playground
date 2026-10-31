@@ -1,6 +1,14 @@
+import { LogOut, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { ErrorBanner } from '../../../shared/components/ErrorBanner';
-import { formatDateTime } from '../../../shared/utils/formatters';
+import {
+  Button,
+  Card,
+  CardGridSkeleton,
+  PageHeader,
+  Tooltip,
+} from '../../../shared/ui';
+import { formatDateTime, formatRelativeTime } from '../../../shared/utils/formatters';
 import { useAuthMutations } from '../../auth/hooks/useAuth';
 import { DeleteAccountSection } from '../components/DeleteAccountSection';
 import { PasswordChangeForm } from '../components/PasswordChangeForm';
@@ -18,72 +26,79 @@ export function ProfilePage() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-            Account Profile
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Manage your identity, password, and session.
-          </p>
-        </div>
+    <div className="max-w-3xl mx-auto w-full space-y-6">
+      <PageHeader
+        title="Profile"
+        description="Manage your account details, password, and session."
+        actions={
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={handleLogout}
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            Log out
+          </Button>
+        }
+      />
 
-        <button
-          type="button"
-          onClick={handleLogout}
-          className="px-4 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors whitespace-nowrap shrink-0"
-        >
-          Sign Out (Local)
-        </button>
-      </div>
-
-      {isLoading && (
-        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 text-sm text-slate-500">
-          Loading profile from GET /auth/me...
-        </div>
-      )}
+      {isLoading && <CardGridSkeleton count={2} />}
 
       {error && (
         <div className="space-y-3">
           <ErrorBanner error={error} title="Could not load profile" />
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
             onClick={() => refetch()}
-            className="px-4 py-2 text-xs font-medium text-white bg-slate-900 dark:bg-slate-100 dark:text-slate-900 rounded-lg"
           >
-            Retry GET /auth/me
-          </button>
+            <RefreshCw className="w-3.5 h-3.5" />
+            Retry
+          </Button>
         </div>
       )}
 
       {profile && (
         <>
-          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6">
+          <Card padding="lg">
             <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="space-y-1">
-                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                  {profile.display_name ||
-                    [profile.first_name, profile.middle_name, profile.last_name]
-                      .filter(Boolean)
-                      .join(' ')}
-                </p>
-                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                  <span>{profile.email}</span>
-                  <span aria-hidden="true">·</span>
-                  <span className="font-mono">ID: {profile.id}</span>
-                  {profile.created_at && (
-                    <>
-                      <span aria-hidden="true">·</span>
-                      <span className="tabular-nums">
-                        Joined {formatDateTime(profile.created_at)}
-                      </span>
-                    </>
-                  )}
+              <div className="flex items-center gap-3.5">
+                <div className="w-11 h-11 rounded-full bg-accent-tint text-accent border border-subtle flex items-center justify-center text-[15px] font-semibold">
+                  {(
+                    profile.display_name ||
+                    profile.first_name ||
+                    profile.email ||
+                    'U'
+                  )
+                    .slice(0, 2)
+                    .toUpperCase()}
+                </div>
+                <div className="space-y-0.5">
+                  <h2 className="text-[15px] font-semibold text-primary">
+                    {profile.display_name ||
+                      [profile.first_name, profile.middle_name, profile.last_name]
+                        .filter(Boolean)
+                        .join(' ')}
+                  </h2>
+                  <div className="flex flex-wrap items-center gap-2 text-[12px] text-secondary">
+                    <span>{profile.email}</span>
+                    {profile.created_at && (
+                      <>
+                        <span aria-hidden="true">·</span>
+                        <Tooltip content={formatDateTime(profile.created_at)}>
+                          <span className="text-muted underline decoration-dotted cursor-default">
+                            Joined {formatRelativeTime(profile.created_at)}
+                          </span>
+                        </Tooltip>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          </Card>
 
           <ProfileNameForm profile={profile} />
           <PasswordChangeForm />

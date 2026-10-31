@@ -1,10 +1,25 @@
+import { Plus, Search, Store } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Tool } from '../../../api/types/tools.types';
 import { ToolStatus, ToolType } from '../../../domain/enums';
-import { EmptyState } from '../../../shared/components/EmptyState';
 import { ErrorBanner } from '../../../shared/components/ErrorBanner';
+import {
+  Badge,
+  Button,
+  Card,
+  CardGridSkeleton,
+  EmptyState,
+  Input,
+  PageHeader,
+} from '../../../shared/ui';
 import { useToolsListQuery } from '../../tools/hooks/useTools';
 import { MarketplaceToolDetailModal } from '../components/MarketplaceToolDetailModal';
+
+const TYPE_CHIPS: ReadonlyArray<{ value: ToolType | ''; label: string }> = [
+  { value: '', label: 'All' },
+  { value: ToolType.Client, label: 'Client' },
+  { value: ToolType.Mcp, label: 'MCP' },
+];
 
 export function MarketplacePage() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -32,94 +47,113 @@ export function MarketplacePage() {
   }, [tools, typeFilter, searchQuery]);
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-          Tool Marketplace
-        </h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          Browse verified public tools from GET /tools?include_public=true and attach them to your agents.
-        </p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Marketplace"
+        description="Browse verified public tools and attach them to your agents."
+      />
 
-      <div className="flex flex-wrap items-center gap-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
-        <input
-          type="search"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search tools by name or description..."
-          className="flex-1 min-w-[240px] rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3.5 py-2 text-xs"
-        />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="relative flex-1 min-w-[240px] max-w-md">
+          <Search className="w-4 h-4 text-muted absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <Input
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search tools by name or description…"
+            className="pl-9"
+          />
+        </div>
 
-        <div className="flex items-center gap-2">
-          <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
-            Type:
-          </label>
-          <select
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value as ToolType | '')}
-            className="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-xs"
-          >
-            <option value="">All types</option>
-            <option value={ToolType.Client}>client</option>
-            <option value={ToolType.Mcp}>mcp</option>
-          </select>
+        <div className="inline-flex items-center gap-1 rounded-lg border border-subtle bg-card p-1">
+          {TYPE_CHIPS.map((chip) => {
+            const active = typeFilter === chip.value;
+            return (
+              <button
+                key={chip.label}
+                type="button"
+                onClick={() => setTypeFilter(chip.value)}
+                className={`px-3 py-1 rounded-md text-[12px] font-medium transition-colors ${
+                  active
+                    ? 'bg-accent text-white'
+                    : 'text-secondary hover:text-primary hover:bg-hover'
+                }`}
+              >
+                {chip.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
       {error && <ErrorBanner error={error} title="Failed to load marketplace" />}
 
       {isLoading ? (
-        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 text-sm text-slate-500">
-          Loading public tools...
-        </div>
+        <CardGridSkeleton count={4} />
       ) : filteredTools.length === 0 ? (
         <EmptyState
+          icon={<Store className="w-5 h-5" />}
           title="No public tools found"
-          description="Once an admin verifies and publishes tools, they appear here for any agent to attach."
+          description="Verified public tools appear here once published."
         />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {filteredTools.map((tool) => (
-            <div
-              key={tool.id}
-              className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 flex flex-col justify-between gap-4"
-            >
-              <div className="space-y-1.5">
-                <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-                  {tool.name}
-                </h3>
-                {tool.description && (
-                  <p className="text-xs text-slate-600 dark:text-slate-300">
-                    {tool.description}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredTools.map((tool) => {
+            const capabilities = tool.current_version?.capabilities_json ?? [];
+            return (
+              <Card
+                key={tool.id}
+                interactive
+                onClick={() => setSelectedTool(tool)}
+                className="flex flex-col justify-between gap-4"
+              >
+                <div className="space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="text-[15px] font-semibold text-primary truncate">
+                      {tool.name}
+                    </h3>
+                    <Badge variant="neutral" mono>
+                      {tool.type}
+                    </Badge>
+                  </div>
+
+                  <p className="text-[13px] text-secondary line-clamp-2 min-h-[38px]">
+                    {tool.description || 'No description provided.'}
                   </p>
-                )}
-                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400 pt-1">
-                  <span className="font-mono">{tool.type}</span>
-                  <span aria-hidden="true">·</span>
-                  <span>{tool.status}</span>
-                  {tool.current_version && (
-                    <>
-                      <span aria-hidden="true">·</span>
-                      <span className="font-mono">
-                        v{tool.current_version.version}
-                      </span>
-                    </>
+
+                  {capabilities.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                      {capabilities.map((cap) => (
+                        <Badge key={cap} variant="info" mono>
+                          {cap}
+                        </Badge>
+                      ))}
+                    </div>
                   )}
                 </div>
-              </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setSelectedTool(tool)}
-                  className="px-3.5 py-1.5 text-xs font-medium text-white bg-slate-900 dark:bg-slate-100 dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-200 rounded-lg transition-colors"
-                >
-                  Inspect &amp; Add to Agent
-                </button>
-              </div>
-            </div>
-          ))}
+                <div className="flex items-center justify-between gap-2 pt-3 border-t border-subtle">
+                  <span className="text-[12px] font-mono text-muted">
+                    {tool.current_version
+                      ? `v${tool.current_version.version}`
+                      : 'Unversioned'}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedTool(tool);
+                    }}
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Add to agent
+                  </Button>
+                </div>
+              </Card>
+            );
+          })}
         </div>
       )}
 

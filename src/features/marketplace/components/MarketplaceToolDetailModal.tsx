@@ -1,6 +1,16 @@
 import { FormEvent, useState } from 'react';
 import { Tool } from '../../../api/types/tools.types';
 import { ErrorBanner } from '../../../shared/components/ErrorBanner';
+import {
+  Badge,
+  Button,
+  CodeBlock,
+  Drawer,
+  FormField,
+  Select,
+  ToolStatusBadge,
+  toast,
+} from '../../../shared/ui';
 import { useAgentMutations, useAgentsQuery } from '../../agents/hooks/useAgents';
 import { useToolVersionsQuery } from '../../tools/hooks/useTools';
 
@@ -19,7 +29,6 @@ export function MarketplaceToolDetailModal({
 
   const [selectedAgentId, setSelectedAgentId] = useState('');
   const [pinnedVersion, setPinnedVersion] = useState<string>('');
-  const [attachedNotice, setAttachedNotice] = useState<string | null>(null);
 
   if (!tool) return null;
 
@@ -29,7 +38,6 @@ export function MarketplaceToolDetailModal({
   const handleAttachToAgent = async (e: FormEvent) => {
     e.preventDefault();
     if (!selectedAgentId) return;
-    setAttachedNotice(null);
     await attachToolMutation.mutateAsync({
       agentId: selectedAgentId,
       toolId: tool.id,
@@ -37,144 +45,143 @@ export function MarketplaceToolDetailModal({
     });
     const agentName =
       agents?.find((a) => a.id === selectedAgentId)?.name ?? 'Agent';
-    setAttachedNotice(
-      `Attached "${tool.name}"${pinnedVersion ? ` (pinned v${pinnedVersion})` : ''} to ${agentName}.`
+    toast.success(
+      'Tool added to agent',
+      `Added "${tool.name}"${pinnedVersion ? ` (v${pinnedVersion})` : ''} to ${agentName}.`
     );
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 backdrop-blur-xs p-4 overflow-y-auto">
-      <div className="w-full max-w-3xl rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-lg space-y-5 my-8">
-        <div className="flex items-start justify-between gap-4">
-          <div className="space-y-1">
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-              {tool.name}
-            </h2>
-            {tool.description && (
-              <p className="text-xs text-slate-600 dark:text-slate-300">
-                {tool.description}
-              </p>
-            )}
-            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-              <span className="font-mono">Type: {tool.type}</span>
-              <span aria-hidden="true">·</span>
-              <span>Status: {tool.status}</span>
-              {activeVersion && (
-                <>
-                  <span aria-hidden="true">·</span>
-                  <span className="font-mono">v{activeVersion.version}</span>
-                </>
-              )}
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 rounded-lg"
-          >
-            Close
-          </button>
+    <Drawer
+      open={Boolean(tool)}
+      title={tool.name}
+      description={tool.description ?? 'Verified marketplace tool.'}
+      width="xl"
+      onClose={onClose}
+    >
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-center gap-2">
+          <ToolStatusBadge status={tool.status} />
+          <Badge variant="neutral" mono>
+            {tool.type}
+          </Badge>
+          {activeVersion && (
+            <Badge variant="neutral" mono>
+              v{activeVersion.version}
+            </Badge>
+          )}
+          {(activeVersion?.capabilities_json ?? []).map((cap) => (
+            <Badge key={cap} variant="info" mono>
+              {cap}
+            </Badge>
+          ))}
         </div>
 
         <form
           onSubmit={handleAttachToAgent}
-          className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 p-4 space-y-3"
+          className="rounded-xl border border-subtle bg-app p-4 space-y-4"
         >
-          <span className="block text-xs font-semibold text-slate-900 dark:text-slate-100">
-            Add to Agent
-          </span>
+          <div className="space-y-0.5">
+            <h3 className="text-[13px] font-semibold text-primary">
+              Add to agent
+            </h3>
+            <p className="text-[12px] text-secondary">
+              Attach this tool to an existing agent and optionally pin a specific version.
+            </p>
+          </div>
+
           {attachToolMutation.error && (
             <ErrorBanner error={attachToolMutation.error} />
           )}
-          {attachedNotice && (
-            <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
-              {attachedNotice}
-            </p>
-          )}
-          <div className="flex flex-wrap items-center gap-3">
-            <select
-              required
-              value={selectedAgentId}
-              onChange={(e) => setSelectedAgentId(e.target.value)}
-              className="flex-1 min-w-[180px] rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs"
-            >
-              <option value="">Select an agent...</option>
-              {(agents ?? []).map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
 
-            <select
-              value={pinnedVersion}
-              onChange={(e) => setPinnedVersion(e.target.value)}
-              className="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs font-mono"
-            >
-              <option value="">Latest version (unpinned)</option>
-              {allVersions.map((v) => (
-                <option key={v.version} value={String(v.version)}>
-                  Pin v{v.version}
-                </option>
-              ))}
-            </select>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <FormField label="Agent" htmlFor="mp-agent-select">
+              <Select
+                id="mp-agent-select"
+                required
+                value={selectedAgentId}
+                onChange={(e) => setSelectedAgentId(e.target.value)}
+              >
+                <option value="">Select an agent…</option>
+                {(agents ?? []).map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </Select>
+            </FormField>
 
-            <button
+            <FormField label="Version" htmlFor="mp-version-select">
+              <Select
+                id="mp-version-select"
+                value={pinnedVersion}
+                onChange={(e) => setPinnedVersion(e.target.value)}
+                className="font-mono"
+              >
+                <option value="">Latest version</option>
+                {allVersions.map((v) => (
+                  <option key={v.version} value={String(v.version)}>
+                    Pin v{v.version}
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+          </div>
+
+          <div className="flex justify-end">
+            <Button
               type="submit"
-              disabled={!selectedAgentId || attachToolMutation.isPending}
-              className="px-4 py-1.5 text-xs font-medium text-white bg-slate-900 dark:bg-slate-100 dark:text-slate-900 rounded-lg disabled:opacity-50"
+              variant="primary"
+              size="sm"
+              disabled={!selectedAgentId}
+              loading={attachToolMutation.isPending}
             >
-              Add to Agent
-            </button>
+              Add to agent
+            </Button>
           </div>
         </form>
 
         {activeVersion && (
-          <div className="space-y-4 text-xs">
-            <div>
-              <span className="font-semibold text-slate-700 dark:text-slate-300">
-                Capabilities:{' '}
+          <div className="space-y-5">
+            <div className="space-y-1.5">
+              <span className="text-[12px] font-medium text-secondary">
+                Source code
               </span>
-              <span className="font-mono text-slate-600 dark:text-slate-400">
-                {activeVersion.capabilities_json?.length
-                  ? activeVersion.capabilities_json.join(', ')
-                  : 'none'}
-              </span>
+              <CodeBlock
+                code={activeVersion.code ?? '// No client source code (MCP tool)'}
+                showLineNumbers
+                maxHeight="240px"
+              />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <span className="font-semibold text-slate-700 dark:text-slate-300">
-                  Read-Only Code
-                </span>
-                <pre className="p-3 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 font-mono overflow-x-auto max-h-56">
-                  {activeVersion.code ?? '// No client code (MCP tool)'}
-                </pre>
-              </div>
-              <div className="space-y-1">
-                <span className="font-semibold text-slate-700 dark:text-slate-300">
-                  Parameter Schema (schema_json)
-                </span>
-                <pre className="p-3 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 font-mono overflow-x-auto max-h-56">
-                  {JSON.stringify(activeVersion.schema_json ?? {}, null, 2)}
-                </pre>
-              </div>
+            <div className="space-y-1.5">
+              <span className="text-[12px] font-medium text-secondary">
+                Parameter schema
+              </span>
+              <CodeBlock
+                code={JSON.stringify(activeVersion.schema_json ?? {}, null, 2)}
+                showLineNumbers
+                maxHeight="240px"
+              />
             </div>
 
-            <div className="space-y-1">
-              <span className="font-semibold text-slate-700 dark:text-slate-300">
-                Published Versions ({allVersions.length})
-              </span>
-              <div className="flex flex-wrap gap-2 font-mono text-slate-600 dark:text-slate-400">
-                {allVersions.map((v) => (
-                  <span key={v.version}>v{v.version}</span>
-                ))}
+            {allVersions.length > 0 && (
+              <div className="space-y-1.5">
+                <span className="text-[12px] font-medium text-secondary">
+                  Published versions ({allVersions.length})
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {allVersions.map((v) => (
+                    <Badge key={v.version} variant="neutral" mono>
+                      v{v.version}
+                    </Badge>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )}
       </div>
-    </div>
+    </Drawer>
   );
 }
