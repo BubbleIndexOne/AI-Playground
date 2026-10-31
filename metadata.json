@@ -1,0 +1,6 @@
+{
+  "name": "Agent Playground",
+  "description": "A BYOK workspace where users create and test tools in an isolated sandbox, browse a marketplace of admin-published tools, configure connectors and model presets, and build AI agents.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
