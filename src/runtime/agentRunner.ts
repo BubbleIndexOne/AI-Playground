@@ -1,7 +1,7 @@
 import { toolsApi } from '../api/tools.api';
 import { ModelPresetParams } from '../api/types/modelPresets.types';
 import { ToolType } from '../domain/enums';
-import { AIProvider } from '../domain/providers';
+import { AIProvider, ModelProvider } from '../domain/providers';
 import { AgentRecord } from '../storage/interfaces/AgentRepository';
 import {
   ChatMessageRecord,
@@ -11,15 +11,17 @@ import { mcpToolExecutor } from './executors/McpToolExecutor';
 import { sandboxToolExecutor } from './executors/SandboxToolExecutor';
 import { ResolvedExecutableTool } from './executors/ToolExecutor';
 import { AnthropicProvider } from './providers/AnthropicProvider';
+import { ProxyRuntimeError } from './providers/authFetch';
 import {
   ChatProvider,
   ProviderMessage,
   ProviderToolDefinition,
 } from './providers/ChatProvider';
+import { CredentialExecutionMode } from './providers/getLanguageModel';
 import { GoogleGeminiProvider } from './providers/GoogleGeminiProvider';
 import { OpenAIProvider } from './providers/OpenAIProvider';
 
-const providers: Record<AIProvider, ChatProvider> = {
+const providers: Record<ModelProvider, ChatProvider> = {
   [AIProvider.Anthropic]: new AnthropicProvider(),
   [AIProvider.OpenAI]: new OpenAIProvider(),
   [AIProvider.Google]: new GoogleGeminiProvider(),
@@ -75,9 +77,9 @@ export async function resolveAgentTools(
 
 export interface RunAgentLoopInput {
   readonly agent: AgentRecord;
-  readonly provider: AIProvider;
+  readonly provider: ModelProvider;
+  readonly mode: CredentialExecutionMode;
   readonly modelId: string;
-  readonly apiKey: string;
   readonly presetParams: ModelPresetParams;
   readonly resolvedTools: readonly ResolvedExecutableTool[];
   readonly history: readonly ChatMessageRecord[];
@@ -91,8 +93,8 @@ export async function runAgentLoop(
   const {
     agent,
     provider,
+    mode,
     modelId,
-    apiKey,
     presetParams,
     resolvedTools,
     history,
@@ -100,7 +102,7 @@ export async function runAgentLoop(
     onPartialUpdate,
   } = input;
 
-  const adapter = providers[provider] ?? providers[AIProvider.OpenAI];
+  const adapter = providers[provider];
 
   const toolMap = new Map<string, ResolvedExecutableTool>();
   const toolDefinitions: ProviderToolDefinition[] = [];
@@ -137,19 +139,33 @@ export async function runAgentLoop(
 
   for (let iteration = 0; iteration < maxIterations; iteration++) {
     let stepText = '';
-    const turnResult = await adapter.streamTurn({
-      apiKey,
-      modelId,
-      systemPrompt: agent.systemPrompt,
-      params: presetParams,
-      tools: toolDefinitions,
-      messages: providerMessages,
-      onTextDelta: (delta) => {
-        stepText += delta;
-        accumulatedText += delta;
-        emitDraft();
-      },
-    });
+    let turnResult;
+    try {
+      turnResult = await adapter.streamTurn({
+        mode,
+        modelId,
+        systemPrompt: agent.systemPrompt,
+        params: presetParams,
+        tools: toolDefinitions,
+        messages: providerMessages,
+        onTextDelta: (delta) => {
+          stepText += delta;
+          accumulatedText += delta;
+          emitDraft();
+        },
+      });
+    } catch (err) {
+      if (err instanceof ProxyRuntimeError) {
+        throw err;
+      }
+      const errMsg =
+        err instanceof Error ? err.message : 'Upstream model request failed';
+      accumulatedText = accumulatedText
+        ? `${accumulatedText}\n\n**Error:** ${errMsg}`
+        : `**Error:** ${errMsg}`;
+      emitDraft();
+      break;
+    }
 
     if (turnResult.toolCalls.length === 0) {
       break;

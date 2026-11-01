@@ -11,7 +11,6 @@ export interface AgentRecord {
   readonly description: string;
   readonly systemPrompt: string;
   readonly modelPresetId: string;
-  readonly credentialId: string;
   readonly attachedTools: readonly AttachedAgentTool[];
   readonly attachedConnectors: readonly ConnectorType[];
   readonly createdAt: string;
@@ -24,7 +23,6 @@ export interface SaveAgentInput {
   readonly description?: string;
   readonly systemPrompt: string;
   readonly modelPresetId: string;
-  readonly credentialId: string;
   readonly attachedTools: readonly AttachedAgentTool[];
   readonly attachedConnectors: readonly ConnectorType[];
 }
