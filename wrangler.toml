@@ -7,7 +7,8 @@ NEXT_PUBLIC_API_BASE_URL = "https://agent-playground-backend-dev.bubbleindexone-
 VITE_API_BASE_URL = "https://agent-playground-backend-dev.bubbleindexone-dev.workers.dev"
 
 [assets]
-directory = "./out"
+directory = "./dist"
+not_found_handling = "single-page-application"
 
 [env.dev]
 name = "ai-playground-dev"
@@ -17,7 +18,8 @@ NEXT_PUBLIC_API_BASE_URL = "https://agent-playground-backend-dev.bubbleindexone-
 VITE_API_BASE_URL = "https://agent-playground-backend-dev.bubbleindexone-dev.workers.dev"
 
 [env.dev.assets]
-directory = "./out"
+directory = "./dist"
+not_found_handling = "single-page-application"
 
 [env.production]
 name = "ai-playground"
@@ -27,4 +29,5 @@ NEXT_PUBLIC_API_BASE_URL = "https://agent-playground-backend-prod.bubbleindexone
 VITE_API_BASE_URL = "https://agent-playground-backend-prod.bubbleindexone-dev.workers.dev"
 
 [env.production.assets]
-directory = "./out"
+directory = "./dist"
+not_found_handling = "single-page-application"
