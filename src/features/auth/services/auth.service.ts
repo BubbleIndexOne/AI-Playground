@@ -4,6 +4,7 @@ import {
   LoginRequest,
   SignupRequest,
 } from '../../../api/types/auth.types';
+import { clearAllSessionKeys } from '../../../runtime/providers/sessionKeyStore';
 import { AuthTokens } from '../../../storage/interfaces/TokenStorage';
 import { tokenStorage } from '../../../storage/local/IndexedDbTokenStorage';
 
@@ -42,6 +43,7 @@ export const authService = {
   },
 
   async logout(): Promise<void> {
+    clearAllSessionKeys();
     await tokenStorage.clearTokens();
   },
 

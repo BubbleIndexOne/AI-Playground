@@ -1,9 +1,8 @@
 const DB_NAME = 'agent_playground_db';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 export const STORES = {
   TOKENS: 'auth_tokens',
-  CREDENTIALS: 'provider_credentials',
   AGENTS: 'agents',
   CHATS: 'chats',
 } as const;
@@ -16,16 +15,26 @@ export function openAppDatabase(): Promise<IDBDatabase> {
   dbPromise = new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-    request.onupgradeneeded = () => {
+    request.onupgradeneeded = (event) => {
       const db = request.result;
       if (!db.objectStoreNames.contains(STORES.TOKENS)) {
         db.createObjectStore(STORES.TOKENS);
       }
-      if (!db.objectStoreNames.contains(STORES.CREDENTIALS)) {
-        db.createObjectStore(STORES.CREDENTIALS, { keyPath: 'id' });
-      }
       if (!db.objectStoreNames.contains(STORES.AGENTS)) {
         db.createObjectStore(STORES.AGENTS, { keyPath: 'id' });
+      } else if (event.oldVersion < 2 && request.transaction) {
+        const agentStore = request.transaction.objectStore(STORES.AGENTS);
+        const cursorReq = agentStore.openCursor();
+        cursorReq.onsuccess = () => {
+          const cursor = cursorReq.result;
+          if (!cursor) return;
+          const value = cursor.value as Record<string, unknown>;
+          if (value && typeof value === 'object' && 'credentialId' in value) {
+            const { credentialId: _dropped, ...rest } = value;
+            cursor.update(rest);
+          }
+          cursor.continue();
+        };
       }
       if (!db.objectStoreNames.contains(STORES.CHATS)) {
         const chatStore = db.createObjectStore(STORES.CHATS, { keyPath: 'id' });
@@ -34,7 +43,8 @@ export function openAppDatabase(): Promise<IDBDatabase> {
     };
 
     request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error ?? new Error('Failed to open IndexedDB'));
+    request.onerror = () =>
+      reject(request.error ?? new Error('Failed to open IndexedDB'));
   });
 
   return dbPromise;
@@ -51,6 +61,7 @@ export async function runTransaction<T>(
     const store = tx.objectStore(storeName);
     const req = operation(store);
     req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error ?? new Error(`IndexedDB error in ${storeName}`));
+    req.onerror = () =>
+      reject(req.error ?? new Error(`IndexedDB error in ${storeName}`));
   });
 }

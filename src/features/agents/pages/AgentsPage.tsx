@@ -1,4 +1,5 @@
 import {
+  AlertTriangle,
   Bot,
   Copy,
   Download,
@@ -11,6 +12,10 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import {
+  getProviderDisplayName,
+  isModelProvider,
+} from '../../../domain/providers';
 import { ErrorBanner } from '../../../shared/components/ErrorBanner';
 import {
   Badge,
@@ -27,6 +32,7 @@ import {
   toast,
 } from '../../../shared/ui';
 import { AgentRecord } from '../../../storage/interfaces/AgentRepository';
+import { useModelCredentials } from '../../credentials/hooks/useModelCredentials';
 import { useModelPresetsQuery } from '../../presets/hooks/useModelPresets';
 import { AgentFormModal } from '../components/AgentFormModal';
 import { useAgentMutations, useAgentsQuery } from '../hooks/useAgents';
@@ -35,10 +41,9 @@ import { agentsService } from '../services/agents.service';
 export function AgentsPage() {
   const navigate = useNavigate();
   const { data: agents, isLoading, error } = useAgentsQuery();
-  const hasPresetRefs = Boolean(
-    agents && agents.some((a) => Boolean(a.modelPresetId))
-  );
-  const { data: presets } = useModelPresetsQuery(undefined, hasPresetRefs);
+  const hasAgents = Boolean(agents && agents.length > 0);
+  const { data: presets } = useModelPresetsQuery(undefined, hasAgents);
+  const { data: credentials } = useModelCredentials(hasAgents);
   const { saveAgentMutation, deleteAgentMutation, importAgentsMutation } =
     useAgentMutations();
 
@@ -48,7 +53,8 @@ export function AgentsPage() {
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [importJsonText, setImportJsonText] = useState('');
 
-  const presetNameById = new Map((presets ?? []).map((p) => [p.id, p.name]));
+  const presetById = new Map((presets ?? []).map((p) => [p.id, p]));
+  const savedProviders = new Set((credentials ?? []).map((c) => c.provider));
 
   const downloadJson = (json: string, filename: string) => {
     const blob = new Blob([json], { type: 'application/json' });
@@ -80,7 +86,6 @@ export function AgentsPage() {
       description: agent.description,
       systemPrompt: agent.systemPrompt,
       modelPresetId: agent.modelPresetId,
-      credentialId: agent.credentialId,
       attachedTools: agent.attachedTools,
       attachedConnectors: agent.attachedConnectors,
     });
@@ -108,8 +113,6 @@ export function AgentsPage() {
     toast.success(`Deleted "${deleteTarget.name}"`);
     setDeleteTarget(null);
   };
-
-  const hasAgents = Boolean(agents && agents.length > 0);
 
   return (
     <div className="space-y-6">
@@ -173,8 +176,14 @@ export function AgentsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {agents!.map((agent) => {
-            const presetName =
-              presetNameById.get(agent.modelPresetId) ?? 'Default model';
+            const preset = presetById.get(agent.modelPresetId);
+            const presetName = preset?.name ?? 'No preset selected';
+            const provider = preset?.provider;
+            const hasSavedKey =
+              Boolean(provider) &&
+              isModelProvider(provider) &&
+              savedProviders.has(provider);
+
             return (
               <Card
                 key={agent.id}
@@ -241,6 +250,14 @@ export function AgentsPage() {
 
                 <div className="pt-3 border-t border-subtle flex flex-wrap items-center gap-2">
                   <Badge variant="neutral">{presetName}</Badge>
+                  {!hasSavedKey && (
+                    <Badge variant="warning">
+                      <AlertTriangle size={11} className="mr-1" />
+                      {provider
+                        ? `${getProviderDisplayName(provider)}: no key saved`
+                        : 'No key saved'}
+                    </Badge>
+                  )}
                   <Badge variant="neutral" mono>
                     {agent.attachedTools.length}{' '}
                     {agent.attachedTools.length === 1 ? 'tool' : 'tools'}

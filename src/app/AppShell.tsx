@@ -17,6 +17,7 @@ import {
 import { ComponentType, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuthMutations } from '../features/auth/hooks/useAuth';
+import { LegacyCredentialMigrationDialog } from '../features/credentials/migration/LegacyCredentialMigrationDialog';
 import { useProfileQuery } from '../features/profile/hooks/useProfile';
 import { DropdownMenu, IconButton, toast, Tooltip } from '../shared/ui';
 import { SettingsModal } from './SettingsModal';
@@ -357,6 +358,8 @@ export function AppShell() {
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
       />
+
+      <LegacyCredentialMigrationDialog />
     </div>
   );
 }
