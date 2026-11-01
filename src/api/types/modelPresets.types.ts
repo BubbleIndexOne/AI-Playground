@@ -14,7 +14,12 @@ export const ModelPresetParamsSchema = z
       .union([
         z.string(),
         z.boolean(),
-        z.object({ effort: z.string().optional(), budgetTokens: z.number().optional() }).passthrough(),
+        z
+          .object({
+            effort: z.string().optional(),
+            budgetTokens: z.number().optional(),
+          })
+          .passthrough(),
       ])
       .nullish(),
     toolChoice: z
@@ -29,14 +34,14 @@ export const ModelPresetParamsSchema = z
 
 export type ModelPresetParams = z.infer<typeof ModelPresetParamsSchema>;
 
-export const ModelPresetSchema = z
+const RawModelPresetSchema = z
   .object({
     id: z.string(),
     name: z.string(),
     description: z.string().nullish(),
     provider: z.string(),
     model_id: z.string(),
-    params: ModelPresetParamsSchema.default({}),
+    params: ModelPresetParamsSchema.nullish().transform((v) => v ?? {}),
     hydrated_params: ModelPresetParamsSchema.nullish(),
     is_archived: z.boolean().optional(),
     archived_at: z.string().nullish(),
@@ -44,6 +49,23 @@ export const ModelPresetSchema = z
     updated_at: z.string().optional(),
   })
   .passthrough();
+
+export const ModelPresetSchema = z.preprocess((val) => {
+  if (val && typeof val === 'object' && !Array.isArray(val)) {
+    const rec = val as Record<string, unknown>;
+    if (
+      rec.preset &&
+      typeof rec.preset === 'object' &&
+      !Array.isArray(rec.preset)
+    ) {
+      return rec.preset;
+    }
+    if (rec.data && typeof rec.data === 'object' && !Array.isArray(rec.data)) {
+      return rec.data;
+    }
+  }
+  return val;
+}, RawModelPresetSchema);
 
 export type ModelPreset = z.infer<typeof ModelPresetSchema>;
 

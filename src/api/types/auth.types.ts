@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const UserProfileSchema = z
+const RawUserProfileSchema = z
   .object({
     id: z.string(),
     email: z.string().email(),
@@ -12,6 +12,19 @@ export const UserProfileSchema = z
     updated_at: z.string().optional(),
   })
   .passthrough();
+
+export const UserProfileSchema = z.preprocess((val) => {
+  if (val && typeof val === 'object' && !Array.isArray(val)) {
+    const rec = val as Record<string, unknown>;
+    if (rec.user && typeof rec.user === 'object' && !Array.isArray(rec.user)) {
+      return rec.user;
+    }
+    if (rec.data && typeof rec.data === 'object' && !Array.isArray(rec.data)) {
+      return rec.data;
+    }
+  }
+  return val;
+}, RawUserProfileSchema);
 
 export type UserProfile = z.infer<typeof UserProfileSchema>;
 

@@ -50,11 +50,20 @@ export function useToolDiffQuery(
   return useQuery({
     queryKey: ['tools', 'diff', toolId, fromVersion, toVersion],
     queryFn: async () => {
-      const [diffMeta, vFrom, vTo] = await Promise.all([
-        toolsService.diffVersions(toolId!, fromVersion!, toVersion!),
+      const [vFrom, vTo] = await Promise.all([
         toolsService.getVersion(toolId!, fromVersion!),
         toolsService.getVersion(toolId!, toVersion!),
       ]);
+      const diffMeta = await toolsService
+        .diffVersions(toolId!, fromVersion!, toVersion!)
+        .catch(() => ({
+          from_version: fromVersion!,
+          to_version: toVersion!,
+          code_changed: (vFrom.code ?? '') !== (vTo.code ?? ''),
+          schema_changed:
+            JSON.stringify(vFrom.schema_json ?? {}) !==
+            JSON.stringify(vTo.schema_json ?? {}),
+        }));
       return { diffMeta, vFrom, vTo };
     },
     enabled: Boolean(

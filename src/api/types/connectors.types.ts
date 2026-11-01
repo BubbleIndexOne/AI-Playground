@@ -23,7 +23,7 @@ export type SlackCredentials = z.infer<typeof SlackCredentialsSchema>;
 
 export type ConnectorCredentials = PostgresCredentials | SlackCredentials;
 
-export const ConnectorMetadataSchema = z
+const RawConnectorMetadataSchema = z
   .object({
     id: z.string().optional(),
     type: z.nativeEnum(ConnectorType),
@@ -34,6 +34,23 @@ export const ConnectorMetadataSchema = z
     updated_at: z.string().optional(),
   })
   .passthrough();
+
+export const ConnectorMetadataSchema = z.preprocess((val) => {
+  if (val && typeof val === 'object' && !Array.isArray(val)) {
+    const rec = val as Record<string, unknown>;
+    if (
+      rec.connector &&
+      typeof rec.connector === 'object' &&
+      !Array.isArray(rec.connector)
+    ) {
+      return rec.connector;
+    }
+    if (rec.data && typeof rec.data === 'object' && !Array.isArray(rec.data)) {
+      return rec.data;
+    }
+  }
+  return val;
+}, RawConnectorMetadataSchema);
 
 export type ConnectorMetadata = z.infer<typeof ConnectorMetadataSchema>;
 

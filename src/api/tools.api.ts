@@ -15,21 +15,19 @@ import {
   UpdateToolInput,
 } from './types/tools.types';
 
-const ToolListResponseSchema = z
-  .union([
-    z.array(ToolSchema),
-    z.object({ items: z.array(ToolSchema) }).transform((v) => v.items),
-    z.object({ data: z.array(ToolSchema) }).transform((v) => v.data),
-    z.object({ tools: z.array(ToolSchema) }).transform((v) => v.tools),
-  ]);
+const ToolListResponseSchema = z.union([
+  z.array(ToolSchema),
+  z.object({ items: z.array(ToolSchema) }).transform((v) => v.items),
+  z.object({ data: z.array(ToolSchema) }).transform((v) => v.data),
+  z.object({ tools: z.array(ToolSchema) }).transform((v) => v.tools),
+]);
 
-const ToolVersionListResponseSchema = z
-  .union([
-    z.array(ToolVersionSchema),
-    z.object({ items: z.array(ToolVersionSchema) }).transform((v) => v.items),
-    z.object({ data: z.array(ToolVersionSchema) }).transform((v) => v.data),
-    z.object({ versions: z.array(ToolVersionSchema) }).transform((v) => v.versions),
-  ]);
+const ToolVersionListResponseSchema = z.union([
+  z.array(ToolVersionSchema),
+  z.object({ items: z.array(ToolVersionSchema) }).transform((v) => v.items),
+  z.object({ data: z.array(ToolVersionSchema) }).transform((v) => v.data),
+  z.object({ versions: z.array(ToolVersionSchema) }).transform((v) => v.versions),
+]);
 
 export interface ListToolsFilters {
   readonly type?: ToolType;
@@ -38,7 +36,10 @@ export interface ListToolsFilters {
 }
 
 export const toolsApi = {
-  list(filters?: ListToolsFilters, security: SecurityScheme = 'bearer'): Promise<Tool[]> {
+  list(
+    filters?: ListToolsFilters,
+    security: SecurityScheme = 'bearer'
+  ): Promise<Tool[]> {
     return apiRequest({
       method: 'GET',
       path: '/tools',
@@ -97,7 +98,10 @@ export const toolsApi = {
     });
   },
 
-  createVersion(toolId: string, body: CreateToolVersionInput): Promise<ToolVersion> {
+  createVersion(
+    toolId: string,
+    body: CreateToolVersionInput
+  ): Promise<ToolVersion> {
     return apiRequest({
       method: 'POST',
       path: `/tools/${encodeURIComponent(toolId)}/versions`,
@@ -132,24 +136,35 @@ export const toolsApi = {
     });
   },
 
-  diffVersions(
+  async diffVersions(
     toolId: string,
     fromVersion: number,
     toVersion: number,
     security: SecurityScheme = 'bearer'
   ): Promise<ToolVersionDiff> {
-    return apiRequest({
-      method: 'GET',
-      path: `/tools/${encodeURIComponent(toolId)}/versions/diff`,
-      query: {
-        from: fromVersion,
-        to: toVersion,
-        v1: fromVersion,
-        v2: toVersion,
-      },
-      security,
-      schema: ToolVersionDiffSchema,
-    });
+    const query = {
+      from: fromVersion,
+      to: toVersion,
+      v1: fromVersion,
+      v2: toVersion,
+    };
+    try {
+      return await apiRequest({
+        method: 'GET',
+        path: `/tools/${encodeURIComponent(toolId)}/diff`,
+        query,
+        security,
+        schema: ToolVersionDiffSchema,
+      });
+    } catch {
+      return apiRequest({
+        method: 'GET',
+        path: `/tools/${encodeURIComponent(toolId)}/versions/diff`,
+        query,
+        security,
+        schema: ToolVersionDiffSchema,
+      });
+    }
   },
 
   register(

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { ConnectorType } from '../domain/enums';
 import { apiRequest } from './http/client';
+import { ApiError } from './http/errors';
 import {
   ConnectorCredentials,
   ConnectorMetadata,
@@ -13,7 +14,9 @@ const ConnectorListResponseSchema = z.union([
   z.array(ConnectorMetadataSchema),
   z.object({ items: z.array(ConnectorMetadataSchema) }).transform((v) => v.items),
   z.object({ data: z.array(ConnectorMetadataSchema) }).transform((v) => v.data),
-  z.object({ connectors: z.array(ConnectorMetadataSchema) }).transform((v) => v.connectors),
+  z
+    .object({ connectors: z.array(ConnectorMetadataSchema) })
+    .transform((v) => v.connectors),
 ]);
 
 export const connectorsApi = {
@@ -26,32 +29,59 @@ export const connectorsApi = {
     });
   },
 
-  getByType(type: ConnectorType): Promise<ConnectorMetadata> {
-    return apiRequest({
-      method: 'GET',
-      path: `/connectors/${encodeURIComponent(type)}`,
-      security: 'bearer',
-      schema: ConnectorMetadataSchema,
-    });
+  async getByType(type: ConnectorType): Promise<ConnectorMetadata> {
+    try {
+      return await apiRequest({
+        method: 'GET',
+        path: `/connectors/${encodeURIComponent(type)}`,
+        security: 'bearer',
+        schema: ConnectorMetadataSchema,
+      });
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) {
+        const all = await connectorsApi.list();
+        const match = all.find((c) => c.type === type);
+        if (match) return match;
+      }
+      throw err;
+    }
   },
 
-  save(
+  async save(
     type: ConnectorType,
     credentials: ConnectorCredentials,
     verify = false
   ): Promise<ConnectorMetadata> {
-    return apiRequest({
-      method: 'PUT',
-      path: `/connectors/${encodeURIComponent(type)}`,
-      query: verify ? { verify: true } : undefined,
-      body: {
-        ...credentials,
-        credentials,
-        verify,
-      },
-      security: 'bearer',
-      schema: ConnectorMetadataSchema,
-    });
+    const body = {
+      ...credentials,
+      credentials,
+      verify,
+    };
+    const query = verify ? { verify: true } : undefined;
+    try {
+      const res = await apiRequest<Record<string, unknown>>({
+        method: 'PUT',
+        path: `/connectors/${encodeURIComponent(type)}/credentials`,
+        query,
+        body,
+        security: 'bearer',
+      });
+      const parsed = ConnectorMetadataSchema.safeParse(res);
+      return parsed.success ? parsed.data : { type };
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) {
+        const res = await apiRequest<Record<string, unknown>>({
+          method: 'PUT',
+          path: `/connectors/${encodeURIComponent(type)}`,
+          query,
+          body,
+          security: 'bearer',
+        });
+        const parsed = ConnectorMetadataSchema.safeParse(res);
+        return parsed.success ? parsed.data : { type };
+      }
+      throw err;
+    }
   },
 
   test(
@@ -61,19 +91,28 @@ export const connectorsApi = {
     return apiRequest({
       method: 'POST',
       path: `/connectors/${encodeURIComponent(type)}/test`,
-      body: credentials
-        ? { ...credentials, credentials }
-        : {},
+      body: credentials ? { ...credentials, credentials } : {},
       security: 'bearer',
       schema: ConnectorTestResponseSchema,
     });
   },
 
-  delete(type: ConnectorType): Promise<unknown> {
-    return apiRequest({
-      method: 'DELETE',
-      path: `/connectors/${encodeURIComponent(type)}`,
-      security: 'bearer',
-    });
+  async delete(type: ConnectorType): Promise<unknown> {
+    try {
+      return await apiRequest({
+        method: 'DELETE',
+        path: `/connectors/${encodeURIComponent(type)}/credentials`,
+        security: 'bearer',
+      });
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) {
+        return apiRequest({
+          method: 'DELETE',
+          path: `/connectors/${encodeURIComponent(type)}`,
+          security: 'bearer',
+        });
+      }
+      throw err;
+    }
   },
 };
