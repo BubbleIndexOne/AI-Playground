@@ -1,4 +1,4 @@
-name = "loom"
+name = "ai-playground"
 main = "src/index.ts"
 compatibility_date = "2026-08-22"
 
@@ -10,7 +10,7 @@ VITE_API_BASE_URL = "https://agent-playground-backend-dev.bubbleindexone-dev.wor
 directory = "./out"
 
 [env.dev]
-name = "loom-dev"
+name = "ai-playground-dev"
 
 [env.dev.vars]
 NEXT_PUBLIC_API_BASE_URL = "https://agent-playground-backend-dev.bubbleindexone-dev.workers.dev"
@@ -20,7 +20,7 @@ VITE_API_BASE_URL = "https://agent-playground-backend-dev.bubbleindexone-dev.wor
 directory = "./out"
 
 [env.production]
-name = "loom"
+name = "ai-playground"
 
 [env.production.vars]
 NEXT_PUBLIC_API_BASE_URL = "https://agent-playground-backend-prod.bubbleindexone-dev.workers.dev"
