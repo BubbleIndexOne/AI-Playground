@@ -103,7 +103,7 @@ export function AppShell() {
             </div>
             {!isRail && (
               <span className="text-[14px] font-semibold tracking-tight text-primary truncate">
-                Agent Playground
+                AI Playground
               </span>
             )}
           </div>
@@ -335,7 +335,7 @@ export function AppShell() {
               onClick={() => setMobileOpen(true)}
             />
             <span className="text-[14px] font-semibold text-primary">
-              Agent Playground
+              AI Playground
             </span>
           </div>
           <IconButton

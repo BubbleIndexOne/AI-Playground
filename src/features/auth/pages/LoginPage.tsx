@@ -40,7 +40,7 @@ export function LoginPage() {
               A
             </span>
             <span className="text-[16px] font-semibold tracking-tight text-primary">
-              Agent Playground
+              AI Playground
             </span>
           </div>
           <h1 className="text-[20px] font-semibold tracking-tight text-primary pt-1">
@@ -99,7 +99,7 @@ export function LoginPage() {
           </form>
 
           <div className="pt-4 border-t border-subtle flex items-center justify-between text-[12px] text-secondary">
-            <span>New to Agent Playground?</span>
+            <span>New to AI Playground?</span>
             <Link
               to="/auth/signup"
               className="font-medium text-accent hover:underline"

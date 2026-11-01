@@ -66,7 +66,7 @@ export function SignupPage() {
               A
             </span>
             <span className="text-[16px] font-semibold tracking-tight text-primary">
-              Agent Playground
+              AI Playground
             </span>
           </div>
           <h1 className="text-[20px] font-semibold tracking-tight text-primary pt-1">

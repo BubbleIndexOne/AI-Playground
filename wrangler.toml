@@ -1,0 +1,30 @@
+name = "loom"
+main = "src/index.ts"
+compatibility_date = "2026-08-22"
+
+[vars]
+NEXT_PUBLIC_API_BASE_URL = "https://agent-playground-backend-dev.bubbleindexone-dev.workers.dev"
+VITE_API_BASE_URL = "https://agent-playground-backend-dev.bubbleindexone-dev.workers.dev"
+
+[assets]
+directory = "./out"
+
+[env.dev]
+name = "loom-dev"
+
+[env.dev.vars]
+NEXT_PUBLIC_API_BASE_URL = "https://agent-playground-backend-dev.bubbleindexone-dev.workers.dev"
+VITE_API_BASE_URL = "https://agent-playground-backend-dev.bubbleindexone-dev.workers.dev"
+
+[env.dev.assets]
+directory = "./out"
+
+[env.production]
+name = "loom"
+
+[env.production.vars]
+NEXT_PUBLIC_API_BASE_URL = "https://agent-playground-backend-prod.bubbleindexone-dev.workers.dev"
+VITE_API_BASE_URL = "https://agent-playground-backend-prod.bubbleindexone-dev.workers.dev"
+
+[env.production.assets]
+directory = "./out"
