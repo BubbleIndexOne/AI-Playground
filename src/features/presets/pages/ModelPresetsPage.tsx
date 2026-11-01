@@ -51,7 +51,7 @@ export function ModelPresetsPage() {
     provider: providerFilter || undefined,
     model_id: modelIdFilter.trim() || undefined,
   });
-  const { data: defaultsData } = useModelPresetDefaultsQuery();
+  const { data: defaultsData } = useModelPresetDefaultsQuery(modalOpen);
   const { archiveMutation, purgeMutation } = useModelPresetMutations();
 
   const handleConfirmDelete = async () => {

@@ -6,17 +6,23 @@ import {
 } from '../../../api/types/modelPresets.types';
 import { modelPresetsService } from '../services/modelPresets.service';
 
-export function useModelPresetsQuery(filters?: ListModelPresetsFilters) {
+export function useModelPresetsQuery(
+  filters?: ListModelPresetsFilters,
+  enabled = true
+) {
   return useQuery({
     queryKey: ['model-presets', filters ?? {}],
     queryFn: () => modelPresetsService.list(filters),
+    enabled,
   });
 }
 
-export function useModelPresetDefaultsQuery() {
+export function useModelPresetDefaultsQuery(enabled = true) {
   return useQuery({
     queryKey: ['model-presets', 'defaults'],
     queryFn: () => modelPresetsService.getDefaults(),
+    enabled,
+    staleTime: Infinity,
   });
 }
 

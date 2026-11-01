@@ -33,15 +33,23 @@ export function useAuthMutations() {
 
   const loginMutation = useMutation({
     mutationFn: (input: LoginRequest) => authService.login(input),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['profile', 'me'] });
+    onSuccess: (res) => {
+      if (res.user) {
+        queryClient.setQueryData(['profile', 'me'], res.user);
+      } else {
+        queryClient.removeQueries({ queryKey: ['profile', 'me'] });
+      }
     },
   });
 
   const signupMutation = useMutation({
     mutationFn: (input: SignupRequest) => authService.signup(input),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['profile', 'me'] });
+    onSuccess: (res) => {
+      if (res.user) {
+        queryClient.setQueryData(['profile', 'me'], res.user);
+      } else {
+        queryClient.removeQueries({ queryKey: ['profile', 'me'] });
+      }
     },
   });
 

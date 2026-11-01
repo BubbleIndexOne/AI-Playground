@@ -33,9 +33,12 @@ export function AgentFormModal({
   onClose,
 }: AgentFormModalProps) {
   const { saveAgentMutation } = useAgentMutations();
-  const { data: presets } = useModelPresetsQuery();
+  const { data: presets } = useModelPresetsQuery(undefined, open);
   const { data: credentials } = useCredentialsQuery();
-  const { data: availableTools } = useToolsListQuery({ include_public: true });
+  const { data: availableTools } = useToolsListQuery(
+    { include_public: true },
+    open
+  );
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');

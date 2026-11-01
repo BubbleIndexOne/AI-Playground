@@ -8,10 +8,11 @@ import {
 import { SandboxRunInput } from '../../../sandbox/protocol';
 import { toolsService } from '../services/tools.service';
 
-export function useToolsListQuery(filters?: ListToolsFilters) {
+export function useToolsListQuery(filters?: ListToolsFilters, enabled = true) {
   return useQuery({
     queryKey: ['tools', 'list', filters ?? {}],
     queryFn: () => toolsService.list(filters),
+    enabled,
   });
 }
 

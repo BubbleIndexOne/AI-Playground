@@ -1,13 +1,22 @@
 import { ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuthSession } from '../features/auth/hooks/useAuth';
+import { useProfileQuery } from '../features/profile/hooks/useProfile';
 import { Spinner } from '../shared/ui';
 
 export function RequireAuth({ children }: { readonly children: ReactNode }) {
-  const { isLoading, isAuthenticated } = useAuthSession();
+  const { isLoading: isSessionLoading, isAuthenticated } = useAuthSession();
+  const {
+    data: profile,
+    isLoading: isProfileLoading,
+    isError: isProfileError,
+  } = useProfileQuery(isAuthenticated);
   const location = useLocation();
 
-  if (isLoading) {
+  if (
+    isSessionLoading ||
+    (isAuthenticated && isProfileLoading && !profile)
+  ) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-app text-[13px] text-secondary gap-2">
         <Spinner size={16} />
@@ -16,7 +25,7 @@ export function RequireAuth({ children }: { readonly children: ReactNode }) {
     );
   }
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated || (isProfileError && !profile)) {
     return <Navigate to="/auth/login" state={{ from: location }} replace />;
   }
 

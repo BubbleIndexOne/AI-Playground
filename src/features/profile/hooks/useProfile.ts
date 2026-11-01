@@ -11,6 +11,11 @@ export function useProfileQuery(enabled = true) {
     queryKey: ['profile', 'me'],
     queryFn: () => profileService.getProfile(),
     enabled,
+    staleTime: Infinity,
+    gcTime: Infinity,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     retry: false,
   });
 }

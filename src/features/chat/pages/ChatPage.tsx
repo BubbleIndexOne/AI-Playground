@@ -35,7 +35,6 @@ export function ChatPage() {
   const initialAgentParam = searchParams.get('agentId');
 
   const { data: agents } = useAgentsQuery();
-  const { data: presets } = useModelPresetsQuery();
   const { data: credentials } = useCredentialsQuery();
 
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(
@@ -63,6 +62,10 @@ export function ChatPage() {
   const selectedAgent =
     agents?.find((a) => a.id === selectedAgentId) ?? null;
 
+  const { data: presets } = useModelPresetsQuery(
+    undefined,
+    Boolean(selectedAgent?.modelPresetId)
+  );
   const { data: chats } = useAgentChatsQuery(selectedAgentId);
   const { data: resolvedTools } = useResolvedAgentToolsQuery(selectedAgent);
   const {

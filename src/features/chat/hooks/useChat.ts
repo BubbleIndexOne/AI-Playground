@@ -19,7 +19,7 @@ export function useResolvedAgentToolsQuery(agent: AgentRecord | null) {
       agent?.attachedTools,
     ],
     queryFn: () => chatService.resolveTools(agent!),
-    enabled: Boolean(agent),
+    enabled: Boolean(agent && agent.attachedTools.length > 0),
   });
 }
 

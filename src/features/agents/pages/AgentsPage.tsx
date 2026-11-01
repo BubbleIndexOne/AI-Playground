@@ -35,7 +35,10 @@ import { agentsService } from '../services/agents.service';
 export function AgentsPage() {
   const navigate = useNavigate();
   const { data: agents, isLoading, error } = useAgentsQuery();
-  const { data: presets } = useModelPresetsQuery();
+  const hasPresetRefs = Boolean(
+    agents && agents.some((a) => Boolean(a.modelPresetId))
+  );
+  const { data: presets } = useModelPresetsQuery(undefined, hasPresetRefs);
   const { saveAgentMutation, deleteAgentMutation, importAgentsMutation } =
     useAgentMutations();
 
