@@ -61,7 +61,7 @@ export function ToolPublishingPanel({
     try {
       const response = await registerToolMutation.mutateAsync(parsedInputs);
       setRegistrationResult(response);
-      toast.success('Submitted for admin review');
+      toast.success('Submitted for review');
     } catch {
       // Displayed via ErrorBanner
     }
@@ -75,7 +75,7 @@ export function ToolPublishingPanel({
             Request publishing
           </h3>
           <p className="text-[13px] text-secondary">
-            Submits the current version to the server for an authoritative security audit and places it in the admin review queue.
+            Submits the current version to the server for an authoritative security audit and verification.
           </p>
         </div>
 

@@ -1,5 +1,4 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
-import { AdminPage } from '../features/admin/pages/AdminPage';
 import { AgentsPage } from '../features/agents/pages/AgentsPage';
 import { LoginPage } from '../features/auth/pages/LoginPage';
 import { SignupPage } from '../features/auth/pages/SignupPage';
@@ -53,7 +52,6 @@ export function AppRouter() {
           <Route path="model-presets" element={<ModelPresetsPage />} />
           <Route path="credentials" element={<CredentialsPage />} />
           <Route path="profile" element={<ProfilePage />} />
-          <Route path="admin" element={<AdminPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/chat" replace />} />

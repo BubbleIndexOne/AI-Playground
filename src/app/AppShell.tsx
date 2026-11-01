@@ -3,13 +3,11 @@ import {
   Cable,
   ChevronLeft,
   ChevronRight,
-  KeyRound,
   LogOut,
   Menu,
   MessageSquare,
   Plug,
   Settings,
-  ShieldCheck,
   Sliders,
   Store,
   User,
@@ -18,11 +16,8 @@ import {
 } from 'lucide-react';
 import { ComponentType, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { AdminKeyDialog } from '../features/admin/components/AdminKeyDialog';
-import { useAdminKeySession } from '../features/admin/hooks/useAdmin';
 import { useAuthMutations } from '../features/auth/hooks/useAuth';
 import { useProfileQuery } from '../features/profile/hooks/useProfile';
-import { ErrorBanner } from '../shared/components/ErrorBanner';
 import { DropdownMenu, IconButton, toast, Tooltip } from '../shared/ui';
 import { SettingsModal } from './SettingsModal';
 
@@ -67,16 +62,9 @@ export function AppShell() {
   const navigate = useNavigate();
   const { data: profile } = useProfileQuery();
   const { logoutMutation } = useAuthMutations();
-  const {
-    hasAdminKey,
-    adminAuthError,
-    clearAdminAuthError,
-    setAdminKey,
-  } = useAdminKeySession();
 
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [adminDialogOpen, setAdminDialogOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const displayName =
@@ -216,61 +204,6 @@ export function AppShell() {
             })}
           </div>
         ))}
-
-        {hasAdminKey && (
-          <div
-            className={`space-y-1 ${isRail ? 'flex flex-col items-center' : ''}`}
-          >
-            {!isRail && (
-              <div className="flex items-center justify-between px-2.5 pb-1">
-                <span className="text-[11px] font-medium text-muted">
-                  Admin
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAdminKey(null);
-                    toast.info('Admin key cleared');
-                  }}
-                  className="text-[11px] text-secondary hover:text-danger transition-colors cursor-pointer"
-                >
-                  Clear key
-                </button>
-              </div>
-            )}
-            <NavLink
-              to="/admin"
-              onClick={() => setMobileOpen(false)}
-              className={({ isActive }) =>
-                `relative flex items-center ${
-                  isRail
-                    ? 'w-10 h-9 justify-center mx-auto'
-                    : 'w-full gap-2.5 px-2.5 h-8'
-                } rounded-lg text-[13px] font-medium transition-colors duration-150 ease-out ${
-                  isActive
-                    ? 'bg-accent-tint text-primary'
-                    : 'text-secondary hover:text-primary hover:bg-hover'
-                }`
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  {isActive && (
-                    <span
-                      aria-hidden="true"
-                      className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-r bg-accent"
-                    />
-                  )}
-                  <ShieldCheck
-                    size={18}
-                    className={isActive ? 'text-accent shrink-0' : 'shrink-0'}
-                  />
-                  {!isRail && <span className="truncate">Review Queue</span>}
-                </>
-              )}
-            </NavLink>
-          </div>
-        )}
       </nav>
 
       {/* Pinned Bottom Controls & User Block */}
@@ -278,24 +211,6 @@ export function AppShell() {
         <div
           className={`space-y-0.5 ${isRail ? 'flex flex-col items-center' : ''}`}
         >
-          <button
-            type="button"
-            onClick={() => setAdminDialogOpen(true)}
-            className={`flex items-center ${
-              isRail
-                ? 'w-10 h-9 justify-center mx-auto'
-                : 'w-full gap-2.5 px-2.5 h-8'
-            } rounded-lg text-[13px] text-secondary hover:text-primary hover:bg-hover transition-colors cursor-pointer`}
-            title={hasAdminKey ? 'Admin key active' : 'Enter admin key'}
-          >
-            <KeyRound size={16} className="shrink-0" />
-            {!isRail && (
-              <span className="truncate">
-                {hasAdminKey ? 'Admin key active' : 'Admin key'}
-              </span>
-            )}
-          </button>
-
           <button
             type="button"
             onClick={() => setSettingsOpen(true)}
@@ -431,16 +346,6 @@ export function AppShell() {
           />
         </header>
 
-        {adminAuthError && (
-          <div className="shrink-0 px-6 pt-4 max-w-[1200px] mx-auto w-full">
-            <ErrorBanner
-              error={new Error(adminAuthError)}
-              title="Invalid or missing admin key"
-              onDismiss={clearAdminAuthError}
-            />
-          </div>
-        )}
-
         <main className="flex-1 p-5 md:p-8 overflow-y-auto">
           <div className="max-w-[1200px] mx-auto w-full">
             <Outlet />
@@ -448,17 +353,9 @@ export function AppShell() {
         </main>
       </div>
 
-      <AdminKeyDialog
-        open={adminDialogOpen}
-        onClose={() => setAdminDialogOpen(false)}
-        onSaveKey={(k) => setAdminKey(k)}
-      />
-
       <SettingsModal
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
-        onOpenAdminKeyDialog={() => setAdminDialogOpen(true)}
-        hasAdminKey={hasAdminKey}
       />
     </div>
   );

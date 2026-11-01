@@ -1,4 +1,4 @@
-import { Activity, KeyRound, Monitor, Moon, Sun } from 'lucide-react';
+import { Activity, Monitor, Moon, Sun } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { env } from '../config/env';
 import { ErrorBanner } from '../shared/components/ErrorBanner';
@@ -16,16 +16,9 @@ import {
 interface SettingsModalProps {
   readonly open: boolean;
   readonly onClose: () => void;
-  readonly onOpenAdminKeyDialog: () => void;
-  readonly hasAdminKey: boolean;
 }
 
-export function SettingsModal({
-  open,
-  onClose,
-  onOpenAdminKeyDialog,
-  hasAdminKey,
-}: SettingsModalProps) {
+export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const healthMutation = useHealthCheckMutation();
   const [themePref, setThemePref] = useState<ThemePreference>(
     getThemePreference()
@@ -50,7 +43,7 @@ export function SettingsModal({
       open={open}
       onClose={onClose}
       title="Settings"
-      description="Appearance, API connection, and administrative session controls."
+      description="Appearance and API connection controls."
       maxWidth="lg"
     >
       <div className="space-y-6">
@@ -121,31 +114,6 @@ export function SettingsModal({
               maxHeight="max-h-48"
             />
           )}
-        </div>
-
-        {/* Admin key */}
-        <div className="pt-4 border-t border-subtle flex items-center justify-between gap-4">
-          <div className="space-y-0.5">
-            <span className="block text-[13px] font-medium text-primary">
-              Admin session key
-            </span>
-            <p className="text-[12px] text-secondary">
-              {hasAdminKey
-                ? 'Active for this browser session.'
-                : 'Enter an admin key to review submitted tools.'}
-            </p>
-          </div>
-          <Button
-            variant="secondary"
-            size="md"
-            icon={<KeyRound size={15} />}
-            onClick={() => {
-              onClose();
-              onOpenAdminKeyDialog();
-            }}
-          >
-            {hasAdminKey ? 'Change admin key' : 'Enter admin key'}
-          </Button>
         </div>
       </div>
     </Dialog>
