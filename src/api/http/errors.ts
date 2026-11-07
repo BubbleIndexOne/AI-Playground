@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const ErrorResponseSchema = z
   .object({
     statusCode: z.number().optional(),
+    success: z.boolean().optional(),
     message: z.union([z.string(), z.array(z.string())]).optional(),
     error: z.string().optional(),
     reason: z.string().optional(),
@@ -82,6 +83,8 @@ export class ApiError extends Error {
     this.details = normalized.details;
   }
 }
+
+export { ApiError as AppError };
 
 export class NotImplementedError extends Error {
   constructor(methodName: string) {

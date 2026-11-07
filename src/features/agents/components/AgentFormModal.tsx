@@ -1,7 +1,13 @@
-import { Search } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, KeyRound, Search } from 'lucide-react';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { ConnectorType } from '../../../domain/enums';
 import {
+  getProviderDisplayName,
+  isModelProvider,
+} from '../../../domain/providers';
+import {
+  Badge,
   Button,
   Checkbox,
   Drawer,
@@ -16,7 +22,7 @@ import {
   AgentRecord,
   AttachedAgentTool,
 } from '../../../storage/interfaces/AgentRepository';
-import { useCredentialsQuery } from '../../credentials/hooks/useCredentials';
+import { useModelCredentials } from '../../credentials/hooks/useModelCredentials';
 import { useModelPresetsQuery } from '../../presets/hooks/useModelPresets';
 import { useToolsListQuery } from '../../tools/hooks/useTools';
 import { useAgentMutations } from '../hooks/useAgents';
@@ -34,7 +40,7 @@ export function AgentFormModal({
 }: AgentFormModalProps) {
   const { saveAgentMutation } = useAgentMutations();
   const { data: presets } = useModelPresetsQuery(undefined, open);
-  const { data: credentials } = useCredentialsQuery();
+  const { data: credentials } = useModelCredentials(open);
   const { data: availableTools } = useToolsListQuery(
     { include_public: true },
     open
@@ -44,7 +50,6 @@ export function AgentFormModal({
   const [description, setDescription] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('');
   const [modelPresetId, setModelPresetId] = useState('');
-  const [credentialId, setCredentialId] = useState('');
   const [attachedTools, setAttachedTools] = useState<AttachedAgentTool[]>([]);
   const [attachedConnectors, setAttachedConnectors] = useState<ConnectorType[]>(
     []
@@ -58,7 +63,6 @@ export function AgentFormModal({
       setDescription(initialAgent.description);
       setSystemPrompt(initialAgent.systemPrompt);
       setModelPresetId(initialAgent.modelPresetId);
-      setCredentialId(initialAgent.credentialId);
       setAttachedTools([...initialAgent.attachedTools]);
       setAttachedConnectors([...initialAgent.attachedConnectors]);
     } else {
@@ -66,12 +70,22 @@ export function AgentFormModal({
       setDescription('');
       setSystemPrompt('You are a helpful AI assistant.');
       setModelPresetId(presets?.[0]?.id ?? '');
-      setCredentialId(credentials?.[0]?.id ?? '');
       setAttachedTools([]);
       setAttachedConnectors([]);
     }
     setToolSearch('');
-  }, [open, initialAgent, presets, credentials]);
+  }, [open, initialAgent, presets]);
+
+  const selectedPreset = useMemo(
+    () => (presets ?? []).find((p) => p.id === modelPresetId) ?? null,
+    [presets, modelPresetId]
+  );
+
+  const selectedProvider = selectedPreset?.provider ?? null;
+  const hasSavedKeyForProvider = useMemo(() => {
+    if (!selectedProvider || !isModelProvider(selectedProvider)) return false;
+    return (credentials ?? []).some((c) => c.provider === selectedProvider);
+  }, [credentials, selectedProvider]);
 
   const filteredTools = useMemo(() => {
     const list = availableTools ?? [];
@@ -118,7 +132,6 @@ export function AgentFormModal({
         description: description.trim(),
         systemPrompt,
         modelPresetId,
-        credentialId,
         attachedTools,
         attachedConnectors,
       });
@@ -208,43 +221,67 @@ export function AgentFormModal({
         </section>
 
         {/* Section 3: Model */}
-        <section className="space-y-4 pt-4 border-t border-subtle">
+        <section className="space-y-3 pt-4 border-t border-subtle">
           <h3 className="text-[14px] font-semibold text-primary">Model</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <FormField
-              label="Model preset"
-              hint="Defines provider, model ID, and sampling parameters."
+          <FormField
+            label="Model preset"
+            hint="Defines provider, model ID, and sampling parameters."
+          >
+            <Select
+              value={modelPresetId}
+              onChange={(e) => setModelPresetId(e.target.value)}
             >
-              <Select
-                value={modelPresetId}
-                onChange={(e) => setModelPresetId(e.target.value)}
-              >
-                <option value="">Default model settings</option>
-                {(presets ?? []).map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} ({p.provider} · {p.model_id})
-                  </option>
-                ))}
-              </Select>
-            </FormField>
+              <option value="">Select a model preset...</option>
+              {(presets ?? []).map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} ({p.provider} · {p.model_id})
+                </option>
+              ))}
+            </Select>
+          </FormField>
 
-            <FormField
-              label="API key"
-              hint="Used when streaming responses directly from your browser."
-            >
-              <Select
-                value={credentialId}
-                onChange={(e) => setCredentialId(e.target.value)}
+          {selectedProvider ? (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-subtle bg-app px-3 py-2 text-[12px]">
+              <div className="flex items-center gap-2">
+                {hasSavedKeyForProvider ? (
+                  <>
+                    <CheckCircle2 size={14} className="text-success shrink-0" />
+                    <span className="text-primary font-medium">
+                      {getProviderDisplayName(selectedProvider)}: saved key
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <AlertTriangle size={14} className="text-warning shrink-0" />
+                    <span className="text-primary font-medium">
+                      {getProviderDisplayName(selectedProvider)}: no key saved
+                    </span>
+                    <Badge variant="warning">No key saved</Badge>
+                  </>
+                )}
+              </div>
+              <Link
+                to="/credentials"
+                onClick={onClose}
+                className="inline-flex items-center gap-1 font-medium text-accent hover:underline"
               >
-                <option value="">Select a saved key...</option>
-                {(credentials ?? []).map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.label} ({c.provider})
-                  </option>
-                ))}
-              </Select>
-            </FormField>
-          </div>
+                <KeyRound size={12} />
+                API Keys
+              </Link>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-subtle bg-app px-3 py-2 text-[12px] text-secondary">
+              <span>Select a model preset to resolve provider credentials.</span>
+              <Link
+                to="/credentials"
+                onClick={onClose}
+                className="inline-flex items-center gap-1 font-medium text-accent hover:underline"
+              >
+                <KeyRound size={12} />
+                API Keys
+              </Link>
+            </div>
+          )}
         </section>
 
         {/* Section 4: Tools */}

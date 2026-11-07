@@ -13,7 +13,6 @@ const AgentImportSchema = z.object({
   description: z.string().default(''),
   systemPrompt: z.string().default(''),
   modelPresetId: z.string().default(''),
-  credentialId: z.string().default(''),
   attachedTools: z
     .array(
       z.object({
@@ -25,25 +24,39 @@ const AgentImportSchema = z.object({
   attachedConnectors: z.array(z.nativeEnum(ConnectorType)).default([]),
 });
 
+function sanitizeAgentRecord(raw: AgentRecord & Record<string, unknown>): AgentRecord {
+  return {
+    id: raw.id,
+    name: raw.name,
+    description: raw.description ?? '',
+    systemPrompt: raw.systemPrompt ?? '',
+    modelPresetId: raw.modelPresetId ?? '',
+    attachedTools: Array.isArray(raw.attachedTools) ? [...raw.attachedTools] : [],
+    attachedConnectors: Array.isArray(raw.attachedConnectors)
+      ? [...raw.attachedConnectors]
+      : [],
+    createdAt: raw.createdAt,
+    updatedAt: raw.updatedAt,
+  };
+}
+
 export class IndexedDbAgentRepository implements AgentRepository {
   async list(): Promise<AgentRecord[]> {
-    const items = await runTransaction<AgentRecord[]>(
+    const items = await runTransaction<Array<AgentRecord & Record<string, unknown>>>(
       STORES.AGENTS,
       'readonly',
       (store) => store.getAll()
     );
-    return (items ?? []).sort((a, b) =>
-      b.updatedAt.localeCompare(a.updatedAt)
-    );
+    return (items ?? [])
+      .map(sanitizeAgentRecord)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
 
   async get(id: string): Promise<AgentRecord | null> {
-    const item = await runTransaction<AgentRecord | undefined>(
-      STORES.AGENTS,
-      'readonly',
-      (store) => store.get(id)
-    );
-    return item ?? null;
+    const item = await runTransaction<
+      (AgentRecord & Record<string, unknown>) | undefined
+    >(STORES.AGENTS, 'readonly', (store) => store.get(id));
+    return item ? sanitizeAgentRecord(item) : null;
   }
 
   async save(input: SaveAgentInput): Promise<AgentRecord> {
@@ -56,7 +69,6 @@ export class IndexedDbAgentRepository implements AgentRepository {
       description: (input.description ?? '').trim(),
       systemPrompt: input.systemPrompt,
       modelPresetId: input.modelPresetId,
-      credentialId: input.credentialId,
       attachedTools: [...input.attachedTools],
       attachedConnectors: [...input.attachedConnectors],
       createdAt: existing?.createdAt ?? now,
@@ -91,7 +103,6 @@ export class IndexedDbAgentRepository implements AgentRepository {
         description: parsed.description,
         systemPrompt: parsed.systemPrompt,
         modelPresetId: parsed.modelPresetId,
-        credentialId: parsed.credentialId,
         attachedTools: parsed.attachedTools,
         attachedConnectors: parsed.attachedConnectors,
       });

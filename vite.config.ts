@@ -51,10 +51,17 @@ function resolveWranglerApiBaseUrl(targetEnv: string): string {
 
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, process.cwd(), '');
-  const targetEnv =
-    process.env.CF_ENV ||
-    process.env.APP_ENV ||
-    (mode === 'production' ? 'production' : 'dev');
+
+  // Determine target environment:
+  // Explicit CF_ENV or APP_ENV takes precedence, otherwise derive from Vite's build mode.
+  const isProduction =
+    process.env.CF_ENV !== undefined
+      ? process.env.CF_ENV === 'production'
+      : process.env.APP_ENV !== undefined
+        ? process.env.APP_ENV === 'production'
+        : mode === 'production';
+
+  const targetEnv = isProduction ? 'production' : 'dev';
 
   const resolvedApiUrl =
     env.VITE_API_BASE_URL ||
