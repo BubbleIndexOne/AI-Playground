@@ -3,7 +3,8 @@
  *
  * Handles HTTP requests at the Cloudflare Workers / Pages edge runtime.
  * Serves exported static Vite assets from the `dist/` directory binding (`env.ASSETS`),
- * with SPA fallback routing to /index.html and rejecting unhandled backend API requests with 404.
+ * injects runtime Cloudflare variables (e.g. VITE_API_BASE_URL) into HTML responses,
+ * provides SPA fallback routing to /index.html, and rejects unhandled backend API requests with 404.
  */
 
 export interface WorkerEnv {
@@ -32,6 +33,27 @@ export default {
       response = await env.ASSETS.fetch(
         new Request(new URL('/index.html', request.url), request)
       );
+    }
+
+    // Inject runtime variables from Cloudflare Worker into HTML responses
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('text/html') && response.ok) {
+      const runtimeApiUrl = env.VITE_API_BASE_URL || env.NEXT_PUBLIC_API_BASE_URL;
+      if (runtimeApiUrl) {
+        const html = await response.text();
+        const injection = `<script>window.__APP_ENV__={apiBaseUrl:${JSON.stringify(runtimeApiUrl)}};</script>`;
+        const modifiedHtml = html.includes('</head>')
+          ? html.replace('</head>', `${injection}</head>`)
+          : `${injection}${html}`;
+
+        const headers = new Headers(response.headers);
+        headers.delete('content-length');
+
+        return new Response(modifiedHtml, {
+          status: response.status,
+          headers,
+        });
+      }
     }
 
     return response;

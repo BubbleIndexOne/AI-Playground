@@ -51,10 +51,15 @@ function resolveWranglerApiBaseUrl(targetEnv: string): string {
 
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, process.cwd(), '');
-  const targetEnv =
-    process.env.CF_ENV ||
-    process.env.APP_ENV ||
-    (mode === 'production' ? 'production' : 'dev');
+
+  // Determine target environment:
+  // Default to 'dev' unless explicitly marked as production or building from main branch in CI
+  const isProduction =
+    process.env.CF_ENV === 'production' ||
+    process.env.APP_ENV === 'production' ||
+    process.env.GITHUB_REF === 'refs/heads/main';
+
+  const targetEnv = isProduction ? 'production' : 'dev';
 
   const resolvedApiUrl =
     env.VITE_API_BASE_URL ||
