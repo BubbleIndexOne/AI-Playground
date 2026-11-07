@@ -9,11 +9,27 @@ export const STORES = {
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
+/**
+ * Opens and returns the local IndexedDB database connection.
+ * Handles schema upgrades, cleans cached connection on errors or version collisions,
+ * and rejects gracefully if another tab blocks a schema migration.
+ *
+ * @returns Promise resolving to the active IDBDatabase instance.
+ */
 export function openAppDatabase(): Promise<IDBDatabase> {
   if (dbPromise) return dbPromise;
 
   dbPromise = new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+    request.onblocked = () => {
+      dbPromise = null;
+      reject(
+        new Error(
+          'IndexedDB upgrade blocked by another open tab. Please close other tabs and reload.'
+        )
+      );
+    };
 
     request.onupgradeneeded = (event) => {
       const db = request.result;
@@ -42,14 +58,32 @@ export function openAppDatabase(): Promise<IDBDatabase> {
       }
     };
 
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () =>
+    request.onsuccess = () => {
+      const db = request.result;
+      db.onversionchange = () => {
+        db.close();
+        dbPromise = null;
+      };
+      resolve(db);
+    };
+
+    request.onerror = () => {
+      dbPromise = null;
       reject(request.error ?? new Error('Failed to open IndexedDB'));
+    };
   });
 
   return dbPromise;
 }
 
+/**
+ * Runs a transactional operation against an IndexedDB object store.
+ *
+ * @param storeName Target object store name.
+ * @param mode Transaction access mode ('readonly' or 'readwrite').
+ * @param operation Callback that executes the store request.
+ * @returns Promise resolving to the request result.
+ */
 export async function runTransaction<T>(
   storeName: string,
   mode: IDBTransactionMode,

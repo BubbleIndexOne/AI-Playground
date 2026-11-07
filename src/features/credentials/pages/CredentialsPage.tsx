@@ -5,6 +5,10 @@ import { Card, PageHeader, TableSkeleton, Tooltip } from '../../../shared/ui';
 import { ProviderCredentialRow } from '../components/ProviderCredentialRow';
 import { useModelCredentials } from '../hooks/useModelCredentials';
 
+/**
+ * CredentialsPage allows users to manage API credentials for each AI model provider,
+ * supporting encrypted account vault storage and per-browser-session memory storage.
+ */
 export function CredentialsPage() {
   const { data: credentials, isLoading, error } = useModelCredentials();
 
@@ -38,7 +42,7 @@ export function CredentialsPage() {
 
       {isLoading ? (
         <TableSkeleton rows={3} />
-      ) : (
+      ) : error && !credentials ? null : (
         <Card padding="none" className="divide-y divide-subtle overflow-hidden">
           {AI_PROVIDERS.map((providerMeta) => (
             <ProviderCredentialRow

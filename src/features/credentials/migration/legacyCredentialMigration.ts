@@ -98,6 +98,13 @@ export async function checkLegacyCredentials(
   return adapter.readAll();
 }
 
+/**
+ * Migrates legacy local browser credentials into the server-side encrypted vault.
+ * Only calls adapter.wipeAll() if every record saved successfully; preserves failed keys for retry.
+ *
+ * @param options Custom adapter or save function for dependency injection and testing.
+ * @returns Summary of successfully migrated providers and any encountered errors.
+ */
 export async function migrateLegacyCredentialsToVault(options?: {
   readonly adapter?: LegacyCredentialAdapter;
   readonly saveFn?: typeof saveModelCredential;
@@ -109,22 +116,23 @@ export async function migrateLegacyCredentialsToVault(options?: {
   const migratedProviders: ModelProvider[] = [];
   const errors: { provider: ModelProvider; message: string }[] = [];
 
-  try {
-    for (const record of records) {
-      try {
-        await saveFn(record.provider, record.apiKey, true);
-        migratedProviders.push(record.provider);
-      } catch (err) {
-        errors.push({
-          provider: record.provider,
-          message:
-            err instanceof Error
-              ? err.message
-              : `Failed to migrate ${record.provider} key`,
-        });
-      }
+  for (const record of records) {
+    try {
+      await saveFn(record.provider, record.apiKey, true);
+      migratedProviders.push(record.provider);
+    } catch (err) {
+      errors.push({
+        provider: record.provider,
+        message:
+          err instanceof Error
+            ? err.message
+            : `Failed to migrate ${record.provider} key`,
+      });
     }
-  } finally {
+  }
+
+  // Only wipe local storage when all records have successfully migrated
+  if (errors.length === 0) {
     await adapter.wipeAll();
   }
 

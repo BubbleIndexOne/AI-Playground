@@ -54,13 +54,22 @@ import {
 } from '../hooks/useChat';
 import { chatService } from '../services/chat.service';
 
+/**
+ * ChatPage provides the primary conversation interface for interacting with configured AI agents.
+ * Handles chat sessions, model presets, credential checks, and live AI streaming execution.
+ */
 export function ChatPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const initialAgentParam = searchParams.get('agentId');
 
   const { data: agents } = useAgentsQuery();
-  const { data: credentials } = useModelCredentials();
+  const {
+    data: credentials,
+    isLoading: isCredentialsLoading,
+    isError: isCredentialsError,
+    error: credentialsError,
+  } = useModelCredentials();
 
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(
     initialAgentParam
@@ -96,7 +105,7 @@ export function ChatPage() {
   const selectedAgent =
     agents?.find((a) => a.id === selectedAgentId) ?? null;
 
-  const { data: presets } = useModelPresetsQuery(
+  const { data: presets, isLoading: isPresetsLoading } = useModelPresetsQuery(
     undefined,
     Boolean(selectedAgent?.modelPresetId)
   );
@@ -124,15 +133,16 @@ export function ChatPage() {
     (p) => p.id === selectedAgent?.modelPresetId
   );
 
-  const presetProvider = activePreset?.provider ?? null;
+  const presetProvider =
+    activePreset && isModelProvider(activePreset.provider)
+      ? activePreset.provider
+      : null;
   const hasVaultKey =
     Boolean(presetProvider) &&
-    isModelProvider(presetProvider) &&
     (credentials ?? []).some((c) => c.provider === presetProvider);
   const hasActiveSessionKey =
     Boolean(presetProvider) &&
-    isModelProvider(presetProvider) &&
-    hasSessionKey(presetProvider);
+    hasSessionKey(presetProvider as ModelProvider);
 
   const handleCreateChat = async () => {
     if (!selectedAgentId) return;
@@ -228,14 +238,66 @@ export function ChatPage() {
     }
   };
 
+  /**
+   * Submits the user prompt after verifying agent configuration, preset resolution,
+   * and credential readiness. Prevents premature key prompts while credentials load.
+   */
   const submitMessage = async () => {
     const trimmed = promptInput.trim();
     if (!selectedAgent || !trimmed || isStreaming) return;
     setRuntimeError(null);
 
-    const preferredMode = presetProvider
-      ? getPreferredMode(presetProvider, hasVaultKey)
-      : undefined;
+    // Wait until preset and credential queries are resolved
+    if (isPresetsLoading || isCredentialsLoading) {
+      setRuntimeError(
+        new Error(
+          'Model configuration and credentials are still loading. Please wait a moment and try again.'
+        )
+      );
+      return;
+    }
+
+    // Do not treat credential fetch error as missing key
+    if (isCredentialsError) {
+      setRuntimeError(
+        credentialsError instanceof Error
+          ? credentialsError
+          : new Error(
+              'Failed to load credentials. Please check your connection and try again.'
+            )
+      );
+      return;
+    }
+
+    // Check confirmed agent preset configuration
+    if (!selectedAgent.modelPresetId) {
+      setRuntimeError(
+        new Error(
+          'This agent has no model preset configured. Please configure one in Agent settings.'
+        )
+      );
+      return;
+    }
+
+    if (!activePreset) {
+      setRuntimeError(
+        new Error(
+          'The configured model preset could not be found. Please check Agent settings.'
+        )
+      );
+      return;
+    }
+
+    if (!presetProvider || !isModelProvider(presetProvider)) {
+      setRuntimeError(
+        new Error(
+          `Model preset has unsupported or missing provider: ${activePreset.provider}`
+        )
+      );
+      return;
+    }
+
+    const preferredMode = getPreferredMode(presetProvider, hasVaultKey);
 
     const modeSelection = selectExecutionMode({
       provider: presetProvider,
@@ -390,11 +452,15 @@ export function ChatPage() {
               <Badge variant="neutral" mono>
                 {activePreset.provider} · {activePreset.model_id}
               </Badge>
+            ) : isPresetsLoading ? (
+              <Badge variant="neutral">Loading preset...</Badge>
             ) : (
               <Badge variant="warning">No preset selected</Badge>
             )}
 
-            {presetProvider && hasProviderNeedsAttention(presetProvider) ? (
+            {isCredentialsLoading ? (
+              <Badge variant="neutral">Checking keys...</Badge>
+            ) : presetProvider && hasProviderNeedsAttention(presetProvider) ? (
               <Badge
                 variant="warning"
                 className="cursor-pointer"

@@ -298,6 +298,39 @@ describe('e) Legacy Migration Module', () => {
     expect(adapter.store).toEqual([]);
   });
 
+  it('does not wipe local records when any record fails to save, preserving failed keys for retry', async () => {
+    const adapter = createInMemoryAdapter([
+      { provider: 'anthropic', apiKey: 'sk-ant-legacy' },
+      { provider: 'openai', apiKey: 'sk-proj-legacy' },
+    ]);
+
+    const saveFn = vi.fn(async (provider) => {
+      if (provider === 'openai') {
+        throw new Error('Network error saving openai key');
+      }
+      return {
+        success: true as const,
+        message: 'Saved',
+        credential: {
+          id: '550e8400-e29b-41d4-a716-446655440000',
+          provider,
+          preview: 'sk-...legacy',
+          key_version: 1,
+          last_verified_at: null,
+          created_at: '2026-10-31T00:00:00Z',
+          updated_at: '2026-10-31T00:00:00Z',
+        },
+      };
+    });
+
+    const res = await migrateLegacyCredentialsToVault({ adapter, saveFn });
+    expect(res.migratedProviders).toEqual(['anthropic']);
+    expect(res.errors).toHaveLength(1);
+    expect(res.errors[0].provider).toBe('openai');
+    expect(adapter.wiped).toBe(false);
+    expect(adapter.store).toHaveLength(2);
+  });
+
   it('wipes local records when migration is declined', async () => {
     const adapter = createInMemoryAdapter([
       { provider: 'google', apiKey: 'AIzaSyLegacy' },

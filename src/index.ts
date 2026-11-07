@@ -16,6 +16,15 @@ export interface WorkerEnv {
 }
 
 export default {
+  /**
+   * Handles incoming HTTP requests to the Worker.
+   * Intercepts navigation requests, serves static SPA assets via env.ASSETS,
+   * and injects runtime environment variables into the served HTML shell.
+   *
+   * @param request Incoming HTTP request.
+   * @param env Environment variables and asset bindings provided by Cloudflare.
+   * @returns Generated or proxied HTTP Response.
+   */
   async fetch(request: Request, env: WorkerEnv): Promise<Response> {
     const url = new URL(request.url);
 

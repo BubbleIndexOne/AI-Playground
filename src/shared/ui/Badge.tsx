@@ -7,6 +7,7 @@ interface BadgeProps {
   readonly mono?: boolean;
   readonly children: ReactNode;
   readonly className?: string;
+  readonly onClick?: () => void;
 }
 
 const VARIANT_CLASSES: Record<SemanticVariant, string> = {
@@ -23,7 +24,22 @@ export function Badge({
   mono = false,
   children,
   className = '',
+  onClick,
 }: BadgeProps) {
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[12px] font-medium leading-4 whitespace-nowrap shrink-0 transition-opacity hover:opacity-80 focus:outline-none cursor-pointer ${
+          VARIANT_CLASSES[variant]
+        } ${mono ? 'font-mono' : ''} ${className}`}
+      >
+        {children}
+      </button>
+    );
+  }
+
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[12px] font-medium leading-4 whitespace-nowrap shrink-0 ${

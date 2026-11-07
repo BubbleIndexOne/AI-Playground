@@ -10,6 +10,10 @@ import {
   migrateLegacyCredentialsToVault,
 } from './legacyCredentialMigration';
 
+/**
+ * Modal dialog that prompts the user when legacy browser-stored credentials exist,
+ * offering to migrate them to the encrypted vault or decline and remove them.
+ */
 export function LegacyCredentialMigrationDialog() {
   const queryClient = useQueryClient();
   const [legacyProviders, setLegacyProviders] = useState<ModelProvider[]>([]);
@@ -43,8 +47,8 @@ export function LegacyCredentialMigrationDialog() {
       await queryClient.invalidateQueries({
         queryKey: MODEL_CREDENTIALS_QUERY_KEY,
       });
-      setLegacyProviders([]);
       if (result.errors.length > 0) {
+        setLegacyProviders(result.errors.map((e) => e.provider));
         toast.error(
           'Some keys could not be moved to vault',
           result.errors
@@ -54,6 +58,7 @@ export function LegacyCredentialMigrationDialog() {
             .join(' · ')
         );
       } else {
+        setLegacyProviders([]);
         toast.success('Moved API keys to encrypted vault');
       }
     } finally {

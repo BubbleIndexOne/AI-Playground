@@ -53,11 +53,13 @@ export default defineConfig(({mode}) => {
   const env = loadEnv(mode, process.cwd(), '');
 
   // Determine target environment:
-  // Default to 'dev' unless explicitly marked as production or building from main branch in CI
+  // Explicit CF_ENV or APP_ENV takes precedence, otherwise derive from Vite's build mode.
   const isProduction =
-    process.env.CF_ENV === 'production' ||
-    process.env.APP_ENV === 'production' ||
-    process.env.GITHUB_REF === 'refs/heads/main';
+    process.env.CF_ENV !== undefined
+      ? process.env.CF_ENV === 'production'
+      : process.env.APP_ENV !== undefined
+        ? process.env.APP_ENV === 'production'
+        : mode === 'production';
 
   const targetEnv = isProduction ? 'production' : 'dev';
 
