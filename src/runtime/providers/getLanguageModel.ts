@@ -29,6 +29,7 @@ export interface SelectExecutionModeInput {
   readonly provider: string | null | undefined;
   readonly hasVaultKey: boolean;
   readonly hasSessionKey: boolean;
+  readonly preferredMode?: 'vault' | 'account' | 'session';
 }
 
 export function selectExecutionMode(
@@ -41,6 +42,26 @@ export function selectExecutionMode(
       status: 'unsupported_provider',
       provider: display,
       message: `Unsupported model provider "${display}". Supported providers are anthropic, openai, and google.`,
+    };
+  }
+
+  const wantsSession = input.preferredMode === 'session';
+  const wantsAccount =
+    input.preferredMode === 'vault' || input.preferredMode === 'account';
+
+  if (wantsSession && input.hasSessionKey) {
+    return {
+      status: 'ready',
+      provider: rawProvider,
+      mode: 'session',
+    };
+  }
+
+  if (wantsAccount && input.hasVaultKey) {
+    return {
+      status: 'ready',
+      provider: rawProvider,
+      mode: 'vault',
     };
   }
 

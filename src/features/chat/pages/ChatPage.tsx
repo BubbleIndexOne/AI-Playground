@@ -3,6 +3,8 @@ import {
   Bot,
   CornerDownLeft,
   KeyRound,
+  Laptop,
+  ShieldCheck,
   Square,
 } from 'lucide-react';
 import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from 'react';
@@ -18,7 +20,10 @@ import {
   selectExecutionMode,
 } from '../../../runtime/providers/getLanguageModel';
 import {
+  getPreferredMode,
+  hasProviderNeedsAttention,
   hasSessionKey,
+  markProviderNeedsAttention,
   subscribeSessionKeys,
 } from '../../../runtime/providers/sessionKeyStore';
 import { ErrorBanner } from '../../../shared/components/ErrorBanner';
@@ -204,6 +209,18 @@ export function ChatPage() {
         navigate('/auth/login', { replace: true });
         return;
       }
+      const errMsg = (err instanceof Error ? err.message : String(err)).toLowerCase();
+      const isRejected =
+        errMsg.includes('api key') ||
+        errMsg.includes('invalid_api_key') ||
+        errMsg.includes('incorrect api key') ||
+        errMsg.includes('unauthorized') ||
+        errMsg.includes('authentication') ||
+        (err instanceof ProxyRuntimeError && (err.status === 401 || err.status === 400));
+
+      if (isRejected && provider) {
+        markProviderNeedsAttention(provider);
+      }
       setRuntimeError(err);
     } finally {
       setIsStreaming(false);
@@ -216,10 +233,15 @@ export function ChatPage() {
     if (!selectedAgent || !trimmed || isStreaming) return;
     setRuntimeError(null);
 
+    const preferredMode = presetProvider
+      ? getPreferredMode(presetProvider, hasVaultKey)
+      : undefined;
+
     const modeSelection = selectExecutionMode({
       provider: presetProvider,
       hasVaultKey,
       hasSessionKey: hasActiveSessionKey,
+      preferredMode,
     });
 
     if (modeSelection.status === 'unsupported_provider') {
@@ -372,12 +394,31 @@ export function ChatPage() {
               <Badge variant="warning">No preset selected</Badge>
             )}
 
-            {hasVaultKey ? (
-              <Badge variant="neutral">Vault key</Badge>
+            {presetProvider && hasProviderNeedsAttention(presetProvider) ? (
+              <Badge
+                variant="warning"
+                className="cursor-pointer"
+                onClick={() => setPendingKeyProvider(presetProvider)}
+              >
+                <AlertTriangle size={12} className="mr-1" />
+                {getProviderDisplayName(presetProvider)}: needs attention
+              </Badge>
+            ) : hasVaultKey ? (
+              <Badge variant="neutral">
+                <ShieldCheck size={12} className="mr-1" />
+                Account key
+              </Badge>
             ) : hasActiveSessionKey ? (
-              <Badge variant="neutral">Session key</Badge>
+              <Badge variant="neutral">
+                <Laptop size={12} className="mr-1" />
+                Session key
+              </Badge>
             ) : presetProvider ? (
-              <Badge variant="warning">
+              <Badge
+                variant="warning"
+                className="cursor-pointer"
+                onClick={() => setPendingKeyProvider(presetProvider)}
+              >
                 {getProviderDisplayName(presetProvider)}: no key saved
               </Badge>
             ) : null}

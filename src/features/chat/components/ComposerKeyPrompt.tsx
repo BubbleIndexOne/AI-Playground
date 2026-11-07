@@ -1,11 +1,16 @@
-import { KeyRound, ShieldCheck } from 'lucide-react';
+import { HelpCircle, KeyRound, Laptop, ShieldCheck } from 'lucide-react';
 import { FormEvent, useEffect, useState } from 'react';
 import { ApiError } from '../../../api/http/errors';
 import { getProviderDisplayName, ModelProvider } from '../../../domain/providers';
 import { CredentialExecutionMode } from '../../../runtime/providers/getLanguageModel';
-import { setSessionKey } from '../../../runtime/providers/sessionKeyStore';
+import {
+  getPreferredMode,
+  setPreferredMode,
+  setSessionKey,
+} from '../../../runtime/providers/sessionKeyStore';
 import { ErrorBanner } from '../../../shared/components/ErrorBanner';
-import { Button, Checkbox, Input, toast } from '../../../shared/ui';
+import { Button, Checkbox, Input, Tooltip, toast } from '../../../shared/ui';
+import { useAuthSession } from '../../auth/hooks/useAuth';
 import { useSaveModelCredential } from '../../credentials/hooks/useModelCredentials';
 
 interface ComposerKeyPromptProps {
@@ -19,10 +24,14 @@ export function ComposerKeyPrompt({
   onResolved,
   onCancel,
 }: ComposerKeyPromptProps) {
+  const { isAuthenticated } = useAuthSession();
   const saveMutation = useSaveModelCredential();
   const providerName = getProviderDisplayName(provider);
 
-  const [choice, setChoice] = useState<'session' | 'vault'>('vault');
+  const [choice, setChoice] = useState<'session' | 'vault'>(() => {
+    const pref = getPreferredMode(provider, false);
+    return pref === 'account' && isAuthenticated ? 'vault' : 'session';
+  });
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [verifyBeforeSave, setVerifyBeforeSave] = useState(true);
   const [inlineError, setInlineError] = useState<unknown>(null);
@@ -39,10 +48,11 @@ export function ComposerKeyPrompt({
     if (!trimmed) return;
 
     setInlineError(null);
-    setApiKeyInput('');
 
     if (choice === 'session') {
       setSessionKey(provider, trimmed);
+      setPreferredMode(provider, 'session');
+      setApiKeyInput('');
       onResolved('session');
       return;
     }
@@ -53,6 +63,8 @@ export function ComposerKeyPrompt({
         apiKey: trimmed,
         verify: verifyBeforeSave,
       });
+      setPreferredMode(provider, 'account');
+      setApiKeyInput('');
       toast.success(res.message);
       onResolved('vault');
     } catch (err) {
@@ -69,31 +81,68 @@ export function ComposerKeyPrompt({
         </div>
 
         <div className="flex items-center gap-1.5">
-          <Button
-            type="button"
-            size="sm"
-            variant={choice === 'session' ? 'primary' : 'secondary'}
-            onClick={() => {
-              setChoice('session');
-              setApiKeyInput('');
-              setInlineError(null);
-            }}
-          >
-            Use a key for this session
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant={choice === 'vault' ? 'primary' : 'secondary'}
-            icon={<ShieldCheck size={13} />}
-            onClick={() => {
-              setChoice('vault');
-              setApiKeyInput('');
-              setInlineError(null);
-            }}
-          >
-            Save a key to the vault
-          </Button>
+          {/* Option 1: Session only */}
+          <div className="inline-flex items-center gap-1">
+            <Button
+              type="button"
+              size="sm"
+              variant={choice === 'session' ? 'primary' : 'secondary'}
+              icon={<Laptop size={13} />}
+              onClick={() => {
+                setChoice('session');
+                setApiKeyInput('');
+                setInlineError(null);
+              }}
+            >
+              This session only
+            </Button>
+            <Tooltip content="Session: your browser sends requests directly to the model provider with your key; nothing is stored on our servers. Cleared when this tab closes.">
+              <span
+                role="button"
+                tabIndex={0}
+                className="inline-flex items-center justify-center text-muted hover:text-primary cursor-help p-1"
+                aria-label="Session mode explanation"
+              >
+                <HelpCircle size={12} />
+              </span>
+            </Tooltip>
+          </div>
+
+          {/* Option 2: Save to account */}
+          <div className="inline-flex items-center gap-1">
+            <Button
+              type="button"
+              size="sm"
+              variant={choice === 'vault' ? 'primary' : 'secondary'}
+              disabled={!isAuthenticated}
+              icon={<ShieldCheck size={13} />}
+              onClick={() => {
+                if (isAuthenticated) {
+                  setChoice('vault');
+                  setApiKeyInput('');
+                  setInlineError(null);
+                }
+              }}
+            >
+              Save to my account
+            </Button>
+            <Tooltip
+              content={
+                !isAuthenticated
+                  ? 'Log in to your account to save keys securely in your encrypted vault.'
+                  : 'Account: your key is encrypted and stored on our safe servers; requests go from your browser to our proxy, which adds your key and forwards them to the provider; your key is never sent back to your browser, and prompts/responses are never logged.'
+              }
+            >
+              <span
+                role="button"
+                tabIndex={0}
+                className="inline-flex items-center justify-center text-muted hover:text-primary cursor-help p-1"
+                aria-label="Account mode explanation"
+              >
+                <HelpCircle size={12} />
+              </span>
+            </Tooltip>
+          </div>
         </div>
       </div>
 
@@ -123,7 +172,7 @@ export function ComposerKeyPrompt({
             placeholder={
               choice === 'session'
                 ? `Enter ${providerName} key for this session only`
-                : `Enter ${providerName} key to save in encrypted vault`
+                : `Enter ${providerName} key to save in encrypted account vault`
             }
             aria-label={`${providerName} API key`}
           />
@@ -147,7 +196,7 @@ export function ComposerKeyPrompt({
           >
             {choice === 'session'
               ? 'Continue with session key'
-              : 'Save to encrypted vault'}
+              : 'Save to my account'}
           </Button>
 
           <Button
