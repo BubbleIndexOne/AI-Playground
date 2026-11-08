@@ -8,6 +8,9 @@ import {
 import { SandboxRunInput } from '../../../sandbox/protocol';
 import { toolsService } from '../services/tools.service';
 
+/**
+ * Hook to query personal tools list with optional status/type filters.
+ */
 export function useToolsListQuery(filters?: ListToolsFilters, enabled = true) {
   return useQuery({
     queryKey: ['tools', 'list', filters ?? {}],
@@ -16,6 +19,9 @@ export function useToolsListQuery(filters?: ListToolsFilters, enabled = true) {
   });
 }
 
+/**
+ * Hook to query detailed tool metadata by ID.
+ */
 export function useToolDetailQuery(toolId: string | undefined) {
   return useQuery({
     queryKey: ['tools', 'detail', toolId],
@@ -24,6 +30,9 @@ export function useToolDetailQuery(toolId: string | undefined) {
   });
 }
 
+/**
+ * Hook to query all historical versions of a tool.
+ */
 export function useToolVersionsQuery(toolId: string | undefined) {
   return useQuery({
     queryKey: ['tools', 'versions', toolId],
@@ -32,6 +41,9 @@ export function useToolVersionsQuery(toolId: string | undefined) {
   });
 }
 
+/**
+ * Hook to query full details for a specific version number of a tool.
+ */
 export function useToolVersionDetailQuery(
   toolId: string | undefined,
   version: number | null
@@ -43,6 +55,9 @@ export function useToolVersionDetailQuery(
   });
 }
 
+/**
+ * Hook to query visual code/schema diffs between two versions.
+ */
 export function useToolDiffQuery(
   toolId: string | undefined,
   fromVersion: number | null,
@@ -76,6 +91,10 @@ export function useToolDiffQuery(
   });
 }
 
+/**
+ * Hook providing author tool mutations: creation, metadata updates,
+ * version creation, registration audit, and MCP server hosting evaluation requests.
+ */
 export function useToolMutations(toolId?: string) {
   const queryClient = useQueryClient();
 
@@ -121,6 +140,26 @@ export function useToolMutations(toolId?: string) {
     },
   });
 
+  const requestMcpHostingMutation = useMutation({
+    mutationFn: (targetToolId?: string) =>
+      toolsService.requestMcpHosting(targetToolId ?? toolId!),
+    onSuccess: (_, targetToolId) => {
+      const id = targetToolId ?? toolId;
+      queryClient.invalidateQueries({ queryKey: ['tools', 'detail', id] });
+      queryClient.invalidateQueries({ queryKey: ['tools', 'list'] });
+    },
+  });
+
+  const withdrawMcpHostingMutation = useMutation({
+    mutationFn: (targetToolId?: string) =>
+      toolsService.withdrawMcpRequest(targetToolId ?? toolId!),
+    onSuccess: (_, targetToolId) => {
+      const id = targetToolId ?? toolId;
+      queryClient.invalidateQueries({ queryKey: ['tools', 'detail', id] });
+      queryClient.invalidateQueries({ queryKey: ['tools', 'list'] });
+    },
+  });
+
   const sandboxRunMutation = useMutation({
     mutationFn: (input: SandboxRunInput) => toolsService.executeInSandbox(input),
   });
@@ -131,6 +170,8 @@ export function useToolMutations(toolId?: string) {
     deleteToolMutation,
     createVersionMutation,
     registerToolMutation,
+    requestMcpHostingMutation,
+    withdrawMcpHostingMutation,
     sandboxRunMutation,
   };
 }

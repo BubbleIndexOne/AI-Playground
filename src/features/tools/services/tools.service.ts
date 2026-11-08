@@ -1,4 +1,5 @@
 import { ListToolsFilters, toolsApi } from '../../../api/tools.api';
+import { ToolMcpRequestResponse } from '../../../api/types/marketplace.types';
 import {
   CreateToolInput,
   CreateToolVersionInput,
@@ -64,6 +65,14 @@ export const toolsService = {
     inputs?: Record<string, unknown>
   ): Promise<ToolRegistrationResponse> {
     return toolsApi.register(toolId, inputs);
+  },
+
+  requestMcpHosting(toolId: string): Promise<ToolMcpRequestResponse> {
+    return toolsApi.requestMcpHosting(toolId);
+  },
+
+  withdrawMcpRequest(toolId: string): Promise<ToolMcpRequestResponse> {
+    return toolsApi.withdrawMcpRequest(toolId);
   },
 
   executeInSandbox(input: SandboxRunInput): Promise<SandboxExecutionOutcome> {

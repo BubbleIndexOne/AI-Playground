@@ -225,6 +225,14 @@ export function ToolDetailPage() {
                   value: tool.allow_client_execution ? 'Allowed' : 'Disabled',
                 },
                 {
+                  key: 'MCP Hosting',
+                  value: tool.is_mcp_hosted
+                    ? 'Active MCP Server'
+                    : tool.mcp_hosting_status && tool.mcp_hosting_status !== 'none'
+                      ? `Evaluation: ${tool.mcp_hosting_status}`
+                      : 'None',
+                },
+                {
                   key: 'Visibility',
                   value: tool.is_public ? 'Public' : 'Private',
                 },

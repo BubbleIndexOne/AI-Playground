@@ -101,6 +101,15 @@ const RawToolSchema = z
       .boolean()
       .nullish()
       .transform((v) => Boolean(v)),
+    is_mcp_hosted: z
+      .boolean()
+      .nullish()
+      .transform((v) => Boolean(v)),
+    mcp_hosting_status: z
+      .enum(['none', 'requested', 'in_review', 'approved', 'rejected'])
+      .or(z.string())
+      .nullish()
+      .transform((v) => v ?? 'none'),
     rejection_reason: z.string().nullish(),
     reason: z.string().nullish(),
     owner_id: z.string().optional(),

@@ -14,6 +14,10 @@ import {
   ToolVersionSchema,
   UpdateToolInput,
 } from './types/tools.types';
+import {
+  ToolMcpRequestResponse,
+  ToolMcpRequestResponseSchema,
+} from './types/marketplace.types';
 
 const ToolListResponseSchema = z.union([
   z.array(ToolSchema),
@@ -177,6 +181,32 @@ export const toolsApi = {
       body: inputs && Object.keys(inputs).length > 0 ? { inputs } : {},
       security: 'bearer',
       schema: ToolRegistrationResponseSchema,
+    });
+  },
+
+  /**
+   * Submits a registered tool for MCP server hosting evaluation.
+   * Sets mcp_hosting_status = 'requested'. Author-only.
+   */
+  requestMcpHosting(toolId: string): Promise<ToolMcpRequestResponse> {
+    return apiRequest({
+      method: 'POST',
+      path: `/tools/${encodeURIComponent(toolId)}/mcp-request`,
+      security: 'bearer',
+      schema: ToolMcpRequestResponseSchema,
+    });
+  },
+
+  /**
+   * Withdraws a pending MCP server hosting evaluation request.
+   * Resets mcp_hosting_status to 'none'. Author-only.
+   */
+  withdrawMcpRequest(toolId: string): Promise<ToolMcpRequestResponse> {
+    return apiRequest({
+      method: 'DELETE',
+      path: `/tools/${encodeURIComponent(toolId)}/mcp-request`,
+      security: 'bearer',
+      schema: ToolMcpRequestResponseSchema,
     });
   },
 };
