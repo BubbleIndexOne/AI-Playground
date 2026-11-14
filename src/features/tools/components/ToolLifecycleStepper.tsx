@@ -97,13 +97,19 @@ export function ToolLifecycleStepper({
       {status === ToolStatus.Rejected && (
         <div className="flex items-start gap-2.5 rounded-lg border border-danger-border bg-danger-tint p-3.5 text-[13px]">
           <XCircle size={16} className="text-danger shrink-0 mt-0.5" />
-          <div className="space-y-0.5">
+          <div className="space-y-1.5 min-w-0 flex-1">
             <p className="font-semibold text-danger">Rejected during review</p>
-            <p className="text-primary">
-              {rejectionReason || 'No reason was provided by the reviewer.'}
-            </p>
+            {rejectionReason ? (
+              <div className="rounded border border-danger-border/40 bg-app/80 p-2 font-mono text-[12px] text-primary whitespace-pre-wrap break-all">
+                {rejectionReason}
+              </div>
+            ) : (
+              <p className="text-secondary text-[12px]">
+                No specific error details provided.
+              </p>
+            )}
             <p className="text-[12px] text-secondary">
-              Save a new version with a passing test to request publishing again.
+              Save a new version with a passing test or valid code/schema to request registration again.
             </p>
           </div>
         </div>

@@ -128,7 +128,7 @@ export function ToolPublishingPanel({
             variant="primary"
             size="md"
             icon={<Send size={15} />}
-            disabled={!hasPassingSandboxTest}
+            disabled={!currentVersion || registerToolMutation.isPending}
             loading={registerToolMutation.isPending}
             onClick={handleRequestPublish}
           >
@@ -136,11 +136,18 @@ export function ToolPublishingPanel({
           </Button>
         </div>
 
-        {!hasPassingSandboxTest && (
+        {!currentVersion ? (
           <div className="rounded-lg border border-warning-border bg-warning-tint px-3.5 py-2.5 text-[13px] text-warning">
-            Run a passing test in the <strong>Test</strong> tab and save it with the current version ({currentVersion ? `v${currentVersion.version}` : 'no version'}) to enable registration audits.
+            Save a version in the <strong>Code</strong> or <strong>Schema</strong> tab to enable registration audits.
           </div>
-        )}
+        ) : !hasPassingSandboxTest ? (
+          <div className="rounded-lg border border-subtle bg-raised/50 px-3.5 py-2.5 text-[12px] text-secondary flex items-center justify-between gap-3">
+            <span>
+              Authoritative registration audit will validate code exports and schema consistency on the backend for version <strong>v{currentVersion.version}</strong>.
+            </span>
+            <Badge variant="neutral">v{currentVersion.version}</Badge>
+          </div>
+        ) : null}
 
         <FormField
           label="Optional verification inputs (JSON)"

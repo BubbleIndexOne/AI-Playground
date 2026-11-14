@@ -136,6 +136,7 @@ export function useToolMutations(toolId?: string) {
       toolsService.registerTool(toolId!, inputs),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tools', 'detail', toolId] });
+      queryClient.invalidateQueries({ queryKey: ['tools', 'versions', toolId] });
       queryClient.invalidateQueries({ queryKey: ['tools', 'list'] });
     },
   });
