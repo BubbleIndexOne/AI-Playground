@@ -82,9 +82,12 @@ export function ConnectorsPage() {
           {CONNECTOR_ITEMS.map((item) => {
             const existing = connectorByType.get(item.type);
             const isConfigured = Boolean(existing);
-            const previewEntries = existing?.preview
-              ? Object.entries(existing.preview)
-              : [];
+            const previewText =
+              typeof existing?.preview === 'string'
+                ? existing.preview
+                : existing?.preview && typeof existing.preview === 'object'
+                  ? JSON.stringify(existing.preview)
+                  : null;
             const testResult = testResults[item.type];
 
             return (
@@ -123,9 +126,9 @@ export function ConnectorsPage() {
 
                   {isConfigured && existing ? (
                     <div className="rounded-lg border border-subtle bg-app p-3 space-y-2">
-                      {previewEntries.length > 0 ? (
+                      {previewText ? (
                         <div className="text-[12px] font-mono text-primary break-all">
-                          {JSON.stringify(existing.preview)}
+                          {previewText}
                         </div>
                       ) : (
                         <div className="text-[12px] text-secondary">

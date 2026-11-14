@@ -46,7 +46,9 @@ export function SlackConnectorForm({
     setValidationError(null);
 
     const parsed = SlackCredentialsSchema.safeParse({
+      botToken: botToken.trim(),
       bot_token: botToken.trim(),
+      signingSecret: signingSecret.trim() || undefined,
       signing_secret: signingSecret.trim() || undefined,
       default_channel: defaultChannel.trim() || undefined,
       team_id: teamId.trim() || undefined,
@@ -71,7 +73,9 @@ export function SlackConnectorForm({
     setValidationError(null);
     setTestResult(null);
     const parsed = SlackCredentialsSchema.safeParse({
+      botToken: botToken.trim(),
       bot_token: botToken.trim(),
+      signingSecret: signingSecret.trim() || undefined,
       signing_secret: signingSecret.trim() || undefined,
       default_channel: defaultChannel.trim() || undefined,
       team_id: teamId.trim() || undefined,
