@@ -66,6 +66,9 @@ export function MarketplacePage() {
   const { installMutation, uninstallMutation, forkMutation } =
     useMarketplaceMutations();
 
+  const [forkingToolId, setForkingToolId] = useState<string | null>(null);
+  const [installingToolId, setInstallingToolId] = useState<string | null>(null);
+
   const tools = marketplaceData?.tools ?? [];
 
   const handleQuickInstallToggle = async (
@@ -73,6 +76,7 @@ export function MarketplacePage() {
     tool: MarketplaceToolSummary
   ) => {
     e.stopPropagation();
+    setInstallingToolId(tool.id);
     try {
       if (tool.is_installed) {
         await uninstallMutation.mutateAsync(tool.id);
@@ -83,6 +87,8 @@ export function MarketplacePage() {
       }
     } catch (err) {
       toast.error('Action failed', err instanceof Error ? err.message : String(err));
+    } finally {
+      setInstallingToolId(null);
     }
   };
 
@@ -99,6 +105,7 @@ export function MarketplacePage() {
       return;
     }
 
+    setForkingToolId(tool.id);
     try {
       const res = await forkMutation.mutateAsync(tool.id);
       toast.success('Tool forked', `Forked ${res.tool.name} into your workspace.`);
@@ -109,6 +116,8 @@ export function MarketplacePage() {
         return;
       }
       toast.error('Fork failed', err instanceof Error ? err.message : String(err));
+    } finally {
+      setForkingToolId(null);
     }
   };
 
@@ -261,7 +270,8 @@ export function MarketplacePage() {
                           variant="secondary"
                           size="sm"
                           icon={<GitFork size={13} />}
-                          loading={forkMutation.isPending}
+                          loading={forkMutation.isPending && forkingToolId === tool.id}
+                          disabled={forkMutation.isPending && forkingToolId !== tool.id}
                           onClick={(e) => handleQuickFork(e, tool)}
                         >
                           Fork
@@ -281,7 +291,12 @@ export function MarketplacePage() {
                         )
                       }
                       loading={
-                        installMutation.isPending || uninstallMutation.isPending
+                        (installMutation.isPending || uninstallMutation.isPending) &&
+                        installingToolId === tool.id
+                      }
+                      disabled={
+                        (installMutation.isPending || uninstallMutation.isPending) &&
+                        installingToolId !== tool.id
                       }
                       onClick={(e) => handleQuickInstallToggle(e, tool)}
                     >

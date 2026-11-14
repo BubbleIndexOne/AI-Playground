@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { ModelPreset } from '../../../api/types/modelPresets.types';
 import {
   getProviderDisplayName,
   isModelProvider,
@@ -107,7 +108,7 @@ export function ChatPage() {
 
   const { data: presets, isLoading: isPresetsLoading } = useModelPresetsQuery(
     undefined,
-    Boolean(selectedAgent?.modelPresetId)
+    true
   );
   const { data: chats } = useAgentChatsQuery(selectedAgentId);
   const { data: resolvedTools } = useResolvedAgentToolsQuery(selectedAgent);
@@ -129,14 +130,62 @@ export function ChatPage() {
   }, [chats, selectedChatId]);
 
   const activeChat = chats?.find((c) => c.id === selectedChatId) ?? null;
-  const activePreset = presets?.find(
+
+  // Resolve model preset:
+  // 1. Matched assigned preset on agent
+  // 2. Or fallback to existing preset (preferring one matching configured credentials)
+  // 3. Or synthesize a default baseline preset
+  const configuredProviders = (credentials ?? [])
+    .map((c) => c.provider)
+    .filter(isModelProvider);
+
+  const matchedAgentPreset = presets?.find(
     (p) => p.id === selectedAgent?.modelPresetId
   );
 
+  const fallbackExistingPreset =
+    presets?.find((p) =>
+      configuredProviders.includes(p.provider as ModelProvider)
+    ) ?? presets?.[0];
+
+  const defaultProvider: ModelProvider =
+    configuredProviders[0] ??
+    (hasSessionKey('google')
+      ? 'google'
+      : hasSessionKey('openai')
+        ? 'openai'
+        : hasSessionKey('anthropic')
+          ? 'anthropic'
+          : 'google');
+
+  const defaultModelId =
+    defaultProvider === 'google'
+      ? 'gemini-3.5-flash'
+      : defaultProvider === 'anthropic'
+        ? 'claude-3-5-sonnet-latest'
+        : 'gpt-4o-mini';
+
+  const defaultSyntheticPreset: ModelPreset = {
+    id: 'default-preset',
+    name: `Default (${getProviderDisplayName(defaultProvider)})`,
+    provider: defaultProvider,
+    model_id: defaultModelId,
+    params: { temperature: 0.7 },
+    hydrated_params: { temperature: 0.7 },
+  };
+
+  const activePreset: ModelPreset =
+    matchedAgentPreset ??
+    fallbackExistingPreset ??
+    defaultSyntheticPreset;
+
+  const isUsingDefaultPreset = !matchedAgentPreset;
+
   const presetProvider =
     activePreset && isModelProvider(activePreset.provider)
-      ? activePreset.provider
-      : null;
+      ? (activePreset.provider as ModelProvider)
+      : defaultProvider;
+
   const hasVaultKey =
     Boolean(presetProvider) &&
     (credentials ?? []).some((c) => c.provider === presetProvider);
@@ -164,7 +213,7 @@ export function ChatPage() {
       (provider === 'anthropic'
         ? 'claude-3-5-sonnet-latest'
         : provider === 'google'
-          ? 'gemini-2.5-flash'
+          ? 'gemini-3.5-flash'
           : 'gpt-4o-mini');
 
     let chatSession = activeChat;
@@ -269,29 +318,10 @@ export function ChatPage() {
       return;
     }
 
-    // Check confirmed agent preset configuration
-    if (!selectedAgent.modelPresetId) {
-      setRuntimeError(
-        new Error(
-          'This agent has no model preset configured. Please configure one in Agent settings.'
-        )
-      );
-      return;
-    }
-
-    if (!activePreset) {
-      setRuntimeError(
-        new Error(
-          'The configured model preset could not be found. Please check Agent settings.'
-        )
-      );
-      return;
-    }
-
     if (!presetProvider || !isModelProvider(presetProvider)) {
       setRuntimeError(
         new Error(
-          `Model preset has unsupported or missing provider: ${activePreset.provider}`
+          `Model provider "${activePreset?.provider || 'unknown'}" is unsupported. Supported providers: anthropic, openai, google.`
         )
       );
       return;
@@ -451,11 +481,12 @@ export function ChatPage() {
             {activePreset ? (
               <Badge variant="neutral" mono>
                 {activePreset.provider} · {activePreset.model_id}
+                {isUsingDefaultPreset ? ' (default)' : ''}
               </Badge>
             ) : isPresetsLoading ? (
               <Badge variant="neutral">Loading preset...</Badge>
             ) : (
-              <Badge variant="warning">No preset selected</Badge>
+              <Badge variant="neutral">Default preset</Badge>
             )}
 
             {isCredentialsLoading ? (

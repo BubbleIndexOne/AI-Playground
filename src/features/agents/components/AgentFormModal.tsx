@@ -231,7 +231,7 @@ export function AgentFormModal({
               value={modelPresetId}
               onChange={(e) => setModelPresetId(e.target.value)}
             >
-              <option value="">Select a model preset...</option>
+              <option value="">Default (Automatic: based on available keys)</option>
               {(presets ?? []).map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name} ({p.provider} · {p.model_id})

@@ -177,7 +177,7 @@ export function AgentsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {agents!.map((agent) => {
             const preset = presetById.get(agent.modelPresetId);
-            const presetName = preset?.name ?? 'No preset selected';
+            const presetName = preset?.name ?? 'Default (auto)';
             const provider = preset?.provider;
             const hasSavedKey =
               Boolean(provider) &&

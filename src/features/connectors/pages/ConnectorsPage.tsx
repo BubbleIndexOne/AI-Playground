@@ -56,13 +56,20 @@ export function ConnectorsPage() {
     setDeleteTarget(null);
   };
 
+  const [testingType, setTestingType] = useState<ConnectorType | null>(null);
+
   const handleTestStored = async (type: ConnectorType) => {
-    const res = await testMutation.mutateAsync({ type });
-    setTestResults((prev) => ({ ...prev, [type]: res }));
-    if (res.ok) {
-      toast.success('Connection verified', res.message ?? `${type} responded.`);
-    } else {
-      toast.error('Connection test failed', res.message ?? 'Check your credentials.');
+    setTestingType(type);
+    try {
+      const res = await testMutation.mutateAsync({ type });
+      setTestResults((prev) => ({ ...prev, [type]: res }));
+      if (res.ok) {
+        toast.success('Connection verified', res.message ?? `${type} responded.`);
+      } else {
+        toast.error('Connection test failed', res.message ?? 'Check your credentials.');
+      }
+    } finally {
+      setTestingType(null);
     }
   };
 
@@ -183,7 +190,8 @@ export function ConnectorsPage() {
                         variant="secondary"
                         size="sm"
                         onClick={() => handleTestStored(item.type)}
-                        loading={testMutation.isPending}
+                        loading={testMutation.isPending && testingType === item.type}
+                        disabled={testMutation.isPending && testingType !== item.type}
                       >
                         <Play className="w-3.5 h-3.5" />
                         Test
