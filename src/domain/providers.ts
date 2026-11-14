@@ -45,7 +45,7 @@ export const AI_PROVIDERS: readonly ProviderMetadata[] = [
   {
     id: AIProvider.Google,
     name: 'Google',
-    defaultModels: ['gemini-2.5-pro', 'gemini-2.5-flash'],
+    defaultModels: ['gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-2.5-flash'],
   },
 ] as const;
 
