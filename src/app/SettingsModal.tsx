@@ -11,6 +11,7 @@ import {
   getThemePreference,
   subscribeThemePreference,
   ThemePreference,
+  Tooltip,
 } from '../shared/ui';
 
 interface SettingsModalProps {
@@ -78,26 +79,25 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
         {/* Health check */}
         <div className="pt-4 border-t border-subtle space-y-3">
           <div className="flex items-center justify-between gap-4">
-            <div className="space-y-0.5">
+            <div>
               <span className="block text-[13px] font-medium text-primary">
                 Service health check
               </span>
               <p className="text-[12px] text-secondary">
-                Endpoint:{' '}
-                <code className="font-mono text-primary">
-                  {env.apiBaseUrl || 'Origin'}/health
-                </code>
+                Verify backend API and database connectivity
               </p>
             </div>
-            <Button
-              variant="secondary"
-              size="md"
-              icon={<Activity size={15} />}
-              loading={healthMutation.isPending}
-              onClick={() => healthMutation.mutate()}
-            >
-              Run health check
-            </Button>
+            <Tooltip content={`Endpoint: ${env.apiBaseUrl || 'Origin'}/health`}>
+              <Button
+                variant="secondary"
+                size="md"
+                icon={<Activity size={15} />}
+                loading={healthMutation.isPending}
+                onClick={() => healthMutation.mutate()}
+              >
+                Run health check
+              </Button>
+            </Tooltip>
           </div>
 
           {healthMutation.error && (
