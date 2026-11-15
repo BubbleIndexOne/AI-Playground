@@ -1,5 +1,5 @@
 import { Edit2, MessageSquare, Plus, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { BlobbieAvatar, Button, IconButton, Input } from '../../../shared/ui';
 import { AgentRecord } from '../../../storage/interfaces/AgentRepository';
 import { ChatSessionRecord } from '../../../storage/interfaces/ChatRepository';
@@ -14,6 +14,52 @@ interface ChatSidebarProps {
   readonly onCreateChat: () => void;
   readonly onRenameChat: (chatId: string, title: string) => void;
   readonly onRequestDeleteChat: (chat: ChatSessionRecord) => void;
+}
+
+/**
+ * Smoothly scrolls/slides long truncated agent names horizontally on hover.
+ */
+function SlidingAgentName({ name }: { name: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const textRef = useRef<HTMLSpanElement>(null);
+  const [overflowPx, setOverflowPx] = useState(0);
+  const [isHovered, setIsHovered] = useState(false);
+
+  useEffect(() => {
+    const updateOverflow = () => {
+      if (containerRef.current && textRef.current) {
+        const diff = textRef.current.scrollWidth - containerRef.current.clientWidth;
+        setOverflowPx(diff > 0 ? diff : 0);
+      }
+    };
+    updateOverflow();
+    window.addEventListener('resize', updateOverflow);
+    return () => window.removeEventListener('resize', updateOverflow);
+  }, [name]);
+
+  const slideDuration = Math.max(1.5, overflowPx / 35);
+
+  return (
+    <div
+      ref={containerRef}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      className="overflow-hidden whitespace-nowrap min-w-0 flex-1 relative"
+    >
+      <span
+        ref={textRef}
+        style={{
+          transform: isHovered && overflowPx > 0 ? `translateX(-${overflowPx + 8}px)` : 'translateX(0)',
+          transition: isHovered && overflowPx > 0
+            ? `transform ${slideDuration}s cubic-bezier(0.2, 0.8, 0.4, 1)`
+            : 'transform 0.4s ease-out',
+        }}
+        className="inline-block"
+      >
+        {name}
+      </span>
+    </div>
+  );
 }
 
 export function ChatSidebar({
@@ -33,7 +79,7 @@ export function ChatSidebar({
   const selectedAgent = agents.find((a) => a.id === selectedAgentId);
 
   return (
-    <div className="w-full md:w-64 shrink-0 rounded-xl border border-subtle bg-card shadow-card flex flex-col overflow-hidden">
+    <div className="w-full md:w-72 shrink-0 rounded-xl border border-subtle bg-card shadow-card flex flex-col overflow-hidden">
       <div className="p-3.5 border-b border-subtle flex items-center justify-between gap-2">
         <span className="text-[13px] font-semibold text-primary">
           Conversations
@@ -50,7 +96,7 @@ export function ChatSidebar({
       </div>
 
       {/* Grouped by Agent */}
-      <div className="flex-1 overflow-y-auto p-2 space-y-3 max-h-[520px]">
+      <div className="flex-1 overflow-y-auto no-scrollbar p-2 space-y-3 max-h-[520px]">
         {agents.map((agent) => {
           const isCurrentAgent = agent.id === selectedAgentId;
           const agentChats = isCurrentAgent ? chats : [];
@@ -60,29 +106,29 @@ export function ChatSidebar({
               <button
                 type="button"
                 onClick={() => onSelectAgent(agent.id)}
-                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left text-[12px] font-semibold transition-colors cursor-pointer ${
+                className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-left text-[12px] font-semibold transition-all cursor-pointer ${
                   isCurrentAgent
-                    ? 'text-primary bg-raised'
+                    ? 'text-primary bg-raised shadow-xs'
                     : 'text-muted hover:text-primary hover:bg-hover'
                 }`}
               >
-                <div className="flex items-center gap-2 min-w-0">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
                   <BlobbieAvatar
                     config={agent.avatar ?? agent.name}
-                    size="xs"
+                    size={34}
                     interactive={false}
                   />
-                  <span className="truncate">{agent.name}</span>
+                  <SlidingAgentName name={agent.name} />
                 </div>
                 {isCurrentAgent && (
-                  <span className="font-mono text-[11px] text-secondary">
+                  <span className="font-mono text-[11px] text-secondary shrink-0 ml-2">
                     {agentChats.length}
                   </span>
                 )}
               </button>
 
               {isCurrentAgent && (
-                <div className="pl-2 space-y-0.5">
+                <div className="pl-3.5 space-y-0.5">
                   {agentChats.length === 0 ? (
                     <p className="px-2.5 py-2 text-[12px] text-muted">
                       No chats for {selectedAgent?.name}.

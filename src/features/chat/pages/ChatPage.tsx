@@ -1,11 +1,11 @@
 import {
   AlertTriangle,
+  ArrowDown,
   Bot,
   ChevronDown,
   CornerDownLeft,
   KeyRound,
   Laptop,
-  Settings,
   ShieldCheck,
   Square,
   Wrench,
@@ -95,9 +95,24 @@ export function ChatPage() {
   const [isToolsDrawerOpen, setIsToolsDrawerOpen] = useState(false);
   const [isInspectorOpen, setIsInspectorOpen] = useState(false);
   const [isComposerFocused, setIsComposerFocused] = useState(false);
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
   const [, setSessionKeyTick] = useState(0);
 
   const stopRequestedRef = useRef(false);
+  const messageContainerRef = useRef<HTMLDivElement>(null);
+
+  const handleMessageScroll = () => {
+    const el = messageContainerRef.current;
+    if (!el) return;
+    const isFar = el.scrollHeight - el.scrollTop - el.clientHeight > 150;
+    setShowScrollBottom(isFar);
+  };
+
+  const scrollToBottom = () => {
+    const el = messageContainerRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+  };
 
   useEffect(() => {
     return subscribeSessionKeys(() => {
@@ -536,64 +551,72 @@ export function ChatPage() {
               </span>
               <ChevronDown size={11} className="text-muted" />
             </button>
-
-            {/* Persona Details Inspector */}
-            <button
-              type="button"
-              onClick={() => setIsInspectorOpen(true)}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] font-medium bg-app hover:bg-raised border border-subtle text-primary transition-colors cursor-pointer"
-              title="Persona Details & Parameters"
-            >
-              <Settings size={13} className="text-secondary" />
-              <span className="hidden sm:inline">Details</span>
-            </button>
           </div>
         </div>
 
         {/* Message Thread */}
-        <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
-          {renderRuntimeError()}
+        <div className="relative flex-1 min-h-0 flex flex-col">
+          <div
+            ref={messageContainerRef}
+            onScroll={handleMessageScroll}
+            className="flex-1 overflow-y-auto no-scrollbar px-6 py-6 space-y-6"
+          >
+            {renderRuntimeError()}
 
-          {displayedMessages.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-center py-16 space-y-1.5">
-              <p className="text-[14px] font-medium text-primary">
-                Start a conversation with {selectedAgent?.name}
-              </p>
-              <p className="text-[13px] text-secondary max-w-sm">
-                Press Enter to send a message, or Shift + Enter for a new line.
-              </p>
-            </div>
-          ) : (
-            displayedMessages.map((msg) =>
-              msg.role === 'user' ? (
-                <div key={msg.id} className="flex justify-end">
-                  <div className="max-w-xl rounded-xl border border-subtle bg-raised px-4 py-2.5 text-[14px] text-primary whitespace-pre-wrap leading-relaxed">
-                    {msg.content}
-                  </div>
-                </div>
-              ) : (
-                <div key={msg.id} className="w-full space-y-3">
-                  <div className="text-[12px] font-medium text-secondary flex items-center gap-1.5">
-                    <BlobbieAvatar
-                      config={selectedAgent?.avatar ?? selectedAgent?.name}
-                      size="xs"
-                      interactive={false}
-                    />
-                    <span>{selectedAgent?.name ?? 'Assistant'}</span>
-                  </div>
-
-                  {msg.toolCalls && msg.toolCalls.length > 0 && (
-                    <div className="space-y-2">
-                      {msg.toolCalls.map((tc) => (
-                        <ChatToolCallCard key={tc.id} toolCall={tc} />
-                      ))}
+            {displayedMessages.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-center py-16 space-y-1.5">
+                <p className="text-[14px] font-medium text-primary">
+                  Start a conversation with {selectedAgent?.name}
+                </p>
+                <p className="text-[13px] text-secondary max-w-sm">
+                  Press Enter to send a message, or Shift + Enter for a new line.
+                </p>
+              </div>
+            ) : (
+              displayedMessages.map((msg) =>
+                msg.role === 'user' ? (
+                  <div key={msg.id} className="flex justify-end">
+                    <div className="max-w-xl rounded-xl border border-subtle bg-raised px-4 py-2.5 text-[14px] text-primary whitespace-pre-wrap leading-relaxed">
+                      {msg.content}
                     </div>
-                  )}
+                  </div>
+                ) : (
+                  <div key={msg.id} className="w-full space-y-3">
+                    <div className="text-[12px] font-medium text-secondary flex items-center gap-1.5">
+                      <BlobbieAvatar
+                        config={selectedAgent?.avatar ?? selectedAgent?.name}
+                        size="xs"
+                        interactive={false}
+                      />
+                      <span>{selectedAgent?.name ?? 'Assistant'}</span>
+                    </div>
 
-                  {msg.content && <MarkdownRenderer content={msg.content} />}
-                </div>
+                    {msg.toolCalls && msg.toolCalls.length > 0 && (
+                      <div className="space-y-2">
+                        {msg.toolCalls.map((tc) => (
+                          <ChatToolCallCard key={tc.id} toolCall={tc} />
+                        ))}
+                      </div>
+                    )}
+
+                    {msg.content && <MarkdownRenderer content={msg.content} />}
+                  </div>
+                )
               )
-            )
+            )}
+          </div>
+
+          {/* Floating Scroll to Bottom Indicator */}
+          {showScrollBottom && (
+            <button
+              type="button"
+              onClick={scrollToBottom}
+              className="absolute bottom-3 right-6 z-10 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card/95 hover:bg-raised border border-subtle text-[12px] font-medium text-primary shadow-raised transition-all backdrop-blur-md cursor-pointer animate-fade-in"
+              title="Jump to latest message"
+            >
+              <ArrowDown size={13} className="text-accent" />
+              <span>Scroll to bottom</span>
+            </button>
           )}
         </div>
 
