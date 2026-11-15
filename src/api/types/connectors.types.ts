@@ -12,12 +12,41 @@ export const PostgresCredentialsSchema = z.object({
 
 export type PostgresCredentials = z.infer<typeof PostgresCredentialsSchema>;
 
-export const SlackCredentialsSchema = z.object({
-  bot_token: z.string().min(1, 'Bot token is required'),
-  signing_secret: z.string().optional(),
-  default_channel: z.string().optional(),
-  team_id: z.string().optional(),
-});
+export const SlackCredentialsSchema = z
+  .object({
+    botToken: z.string().optional(),
+    bot_token: z.string().optional(),
+    signingSecret: z.string().optional(),
+    signing_secret: z.string().optional(),
+    default_channel: z.string().optional(),
+    team_id: z.string().optional(),
+  })
+  .refine((val) => Boolean(val.botToken || val.bot_token), {
+    message: 'Bot token is required',
+    path: ['botToken'],
+  })
+  .refine(
+    (val) => {
+      const token = val.botToken || val.bot_token || '';
+      return token.startsWith('xoxb-');
+    },
+    {
+      message: 'Bot token must start with "xoxb-"',
+      path: ['botToken'],
+    }
+  )
+  .transform((val) => {
+    const token = (val.botToken || val.bot_token || '').trim();
+    const secret = (val.signingSecret || val.signing_secret || '').trim() || undefined;
+    return {
+      botToken: token,
+      bot_token: token,
+      signingSecret: secret,
+      signing_secret: secret,
+      default_channel: val.default_channel?.trim() || undefined,
+      team_id: val.team_id?.trim() || undefined,
+    };
+  });
 
 export type SlackCredentials = z.infer<typeof SlackCredentialsSchema>;
 
@@ -27,7 +56,8 @@ const RawConnectorMetadataSchema = z
   .object({
     id: z.string().optional(),
     type: z.nativeEnum(ConnectorType),
-    preview: z.record(z.string(), z.unknown()).nullish(),
+    connector_type: z.string().optional(),
+    preview: z.union([z.record(z.string(), z.unknown()), z.string()]).nullish(),
     is_verified: z.boolean().optional(),
     verified_at: z.string().nullish(),
     created_at: z.string().optional(),
@@ -37,17 +67,23 @@ const RawConnectorMetadataSchema = z
 
 export const ConnectorMetadataSchema = z.preprocess((val) => {
   if (val && typeof val === 'object' && !Array.isArray(val)) {
-    const rec = val as Record<string, unknown>;
+    let rec = val as Record<string, unknown>;
     if (
       rec.connector &&
       typeof rec.connector === 'object' &&
       !Array.isArray(rec.connector)
     ) {
-      return rec.connector;
+      rec = rec.connector as Record<string, unknown>;
+    } else if (rec.data && typeof rec.data === 'object' && !Array.isArray(rec.data)) {
+      rec = rec.data as Record<string, unknown>;
     }
-    if (rec.data && typeof rec.data === 'object' && !Array.isArray(rec.data)) {
-      return rec.data;
-    }
+
+    const resolvedType = (rec.type || rec.connector_type) as ConnectorType;
+    return {
+      ...rec,
+      type: resolvedType,
+      connector_type: resolvedType,
+    };
   }
   return val;
 }, RawConnectorMetadataSchema);

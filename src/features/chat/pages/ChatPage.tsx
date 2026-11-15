@@ -1,14 +1,18 @@
 import {
   AlertTriangle,
+  ArrowDown,
   Bot,
+  ChevronDown,
   CornerDownLeft,
   KeyRound,
   Laptop,
   ShieldCheck,
   Square,
+  Wrench,
 } from 'lucide-react';
 import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { ModelPreset } from '../../../api/types/modelPresets.types';
 import {
   getProviderDisplayName,
   isModelProvider,
@@ -29,8 +33,10 @@ import {
 import { ErrorBanner } from '../../../shared/components/ErrorBanner';
 import {
   Badge,
+  BlobbieAvatar,
   Button,
   ConfirmDialog,
+  Drawer,
   EmptyState,
   Select,
   Textarea,
@@ -86,9 +92,27 @@ export function ChatPage() {
   );
   const [pendingKeyProvider, setPendingKeyProvider] =
     useState<ModelProvider | null>(null);
+  const [isToolsDrawerOpen, setIsToolsDrawerOpen] = useState(false);
+  const [isInspectorOpen, setIsInspectorOpen] = useState(false);
+  const [isComposerFocused, setIsComposerFocused] = useState(false);
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
   const [, setSessionKeyTick] = useState(0);
 
   const stopRequestedRef = useRef(false);
+  const messageContainerRef = useRef<HTMLDivElement>(null);
+
+  const handleMessageScroll = () => {
+    const el = messageContainerRef.current;
+    if (!el) return;
+    const isFar = el.scrollHeight - el.scrollTop - el.clientHeight > 150;
+    setShowScrollBottom(isFar);
+  };
+
+  const scrollToBottom = () => {
+    const el = messageContainerRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+  };
 
   useEffect(() => {
     return subscribeSessionKeys(() => {
@@ -107,7 +131,7 @@ export function ChatPage() {
 
   const { data: presets, isLoading: isPresetsLoading } = useModelPresetsQuery(
     undefined,
-    Boolean(selectedAgent?.modelPresetId)
+    true
   );
   const { data: chats } = useAgentChatsQuery(selectedAgentId);
   const { data: resolvedTools } = useResolvedAgentToolsQuery(selectedAgent);
@@ -129,14 +153,62 @@ export function ChatPage() {
   }, [chats, selectedChatId]);
 
   const activeChat = chats?.find((c) => c.id === selectedChatId) ?? null;
-  const activePreset = presets?.find(
+
+  // Resolve model preset:
+  // 1. Matched assigned preset on agent
+  // 2. Or fallback to existing preset (preferring one matching configured credentials)
+  // 3. Or synthesize a default baseline preset
+  const configuredProviders = (credentials ?? [])
+    .map((c) => c.provider)
+    .filter(isModelProvider);
+
+  const matchedAgentPreset = presets?.find(
     (p) => p.id === selectedAgent?.modelPresetId
   );
 
+  const fallbackExistingPreset =
+    presets?.find((p) =>
+      configuredProviders.includes(p.provider as ModelProvider)
+    ) ?? presets?.[0];
+
+  const defaultProvider: ModelProvider =
+    configuredProviders[0] ??
+    (hasSessionKey('google')
+      ? 'google'
+      : hasSessionKey('openai')
+        ? 'openai'
+        : hasSessionKey('anthropic')
+          ? 'anthropic'
+          : 'google');
+
+  const defaultModelId =
+    defaultProvider === 'google'
+      ? 'gemini-3.5-flash'
+      : defaultProvider === 'anthropic'
+        ? 'claude-3-5-sonnet-latest'
+        : 'gpt-4o-mini';
+
+  const defaultSyntheticPreset: ModelPreset = {
+    id: 'default-preset',
+    name: `Default (${getProviderDisplayName(defaultProvider)})`,
+    provider: defaultProvider,
+    model_id: defaultModelId,
+    params: { temperature: 0.7 },
+    hydrated_params: { temperature: 0.7 },
+  };
+
+  const activePreset: ModelPreset =
+    matchedAgentPreset ??
+    fallbackExistingPreset ??
+    defaultSyntheticPreset;
+
+  const isUsingDefaultPreset = !matchedAgentPreset;
+
   const presetProvider =
     activePreset && isModelProvider(activePreset.provider)
-      ? activePreset.provider
-      : null;
+      ? (activePreset.provider as ModelProvider)
+      : defaultProvider;
+
   const hasVaultKey =
     Boolean(presetProvider) &&
     (credentials ?? []).some((c) => c.provider === presetProvider);
@@ -164,7 +236,7 @@ export function ChatPage() {
       (provider === 'anthropic'
         ? 'claude-3-5-sonnet-latest'
         : provider === 'google'
-          ? 'gemini-2.5-flash'
+          ? 'gemini-3.5-flash'
           : 'gpt-4o-mini');
 
     let chatSession = activeChat;
@@ -269,29 +341,10 @@ export function ChatPage() {
       return;
     }
 
-    // Check confirmed agent preset configuration
-    if (!selectedAgent.modelPresetId) {
-      setRuntimeError(
-        new Error(
-          'This agent has no model preset configured. Please configure one in Agent settings.'
-        )
-      );
-      return;
-    }
-
-    if (!activePreset) {
-      setRuntimeError(
-        new Error(
-          'The configured model preset could not be found. Please check Agent settings.'
-        )
-      );
-      return;
-    }
-
     if (!presetProvider || !isModelProvider(presetProvider)) {
       setRuntimeError(
         new Error(
-          `Model preset has unsupported or missing provider: ${activePreset.provider}`
+          `Model provider "${activePreset?.provider || 'unknown'}" is unsupported. Supported providers: anthropic, openai, google.`
         )
       );
       return;
@@ -427,140 +480,143 @@ export function ChatPage() {
 
       {/* Right Conversation Pane */}
       <div className="flex-1 rounded-xl border border-subtle bg-card shadow-card flex flex-col min-w-0 overflow-hidden">
-        {/* Chat Header with Agent Selector and Model Info */}
+        {/* Chat Header with Agent Identity and Status */}
         <div className="px-5 py-3 border-b border-subtle flex flex-wrap items-center justify-between gap-3 bg-raised/30 shrink-0">
-          <div className="flex flex-wrap items-center gap-2.5 min-w-0">
-            <div className="w-48">
-              <Select
-                value={selectedAgentId ?? ''}
-                onChange={(e) => {
-                  setSelectedAgentId(e.target.value || null);
-                  setSelectedChatId(null);
-                  setPendingKeyProvider(null);
-                  setRuntimeError(null);
-                }}
-              >
-                {agents.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
-
-            {activePreset ? (
-              <Badge variant="neutral" mono>
-                {activePreset.provider} · {activePreset.model_id}
-              </Badge>
-            ) : isPresetsLoading ? (
-              <Badge variant="neutral">Loading preset...</Badge>
-            ) : (
-              <Badge variant="warning">No preset selected</Badge>
-            )}
-
-            {isCredentialsLoading ? (
-              <Badge variant="neutral">Checking keys...</Badge>
-            ) : presetProvider && hasProviderNeedsAttention(presetProvider) ? (
-              <Badge
-                variant="warning"
-                className="cursor-pointer"
-                onClick={() => setPendingKeyProvider(presetProvider)}
-              >
-                <AlertTriangle size={12} className="mr-1" />
-                {getProviderDisplayName(presetProvider)}: needs attention
-              </Badge>
-            ) : hasVaultKey ? (
-              <Badge variant="neutral">
-                <ShieldCheck size={12} className="mr-1" />
-                Account key
-              </Badge>
-            ) : hasActiveSessionKey ? (
-              <Badge variant="neutral">
-                <Laptop size={12} className="mr-1" />
-                Session key
-              </Badge>
-            ) : presetProvider ? (
-              <Badge
-                variant="warning"
-                className="cursor-pointer"
-                onClick={() => setPendingKeyProvider(presetProvider)}
-              >
-                {getProviderDisplayName(presetProvider)}: no key saved
-              </Badge>
-            ) : null}
-
-            {(resolvedTools ?? []).map((rt) => (
-              <Badge
-                key={rt.tool.id}
-                mono
-                variant={rt.executableInBrowser ? 'info' : 'muted'}
-              >
-                {rt.tool.name} v{rt.version.version}
-                {!rt.executableInBrowser ? ' (non-executable)' : ''}
-              </Badge>
-            ))}
-
-            {selectedAgent?.attachedConnectors.map((conn) => (
-              <Badge key={conn} mono variant="muted">
-                {conn} (non-executable)
-              </Badge>
-            ))}
+          <div className="flex items-center gap-3 min-w-0">
+            <BlobbieAvatar
+              config={selectedAgent?.avatar ?? selectedAgent?.name}
+              size="md"
+              gazeFocus={isComposerFocused ? 'down' : 'cursor'}
+              onClick={() => setIsInspectorOpen(true)}
+              title="Click to view Persona Details"
+            />
+            <button
+              type="button"
+              onClick={() => setIsInspectorOpen(true)}
+              className="text-left cursor-pointer hover:opacity-85 transition-opacity min-w-0"
+              title="Click to view Persona Details"
+            >
+              <div className="text-[14px] font-semibold text-primary truncate leading-tight">
+                {selectedAgent?.name ?? 'Select an Agent'}
+              </div>
+              <div className="text-[11px] text-secondary truncate flex items-center gap-1.5 mt-0.5">
+                <span>
+                  {activePreset
+                    ? `${activePreset.provider} · ${activePreset.model_id}${isUsingDefaultPreset ? ' (default)' : ''}`
+                    : isPresetsLoading
+                      ? 'Loading preset...'
+                      : 'Default model'}
+                </span>
+                <span>•</span>
+                <span>
+                  {(resolvedTools ?? []).length}{' '}
+                  {(resolvedTools ?? []).length === 1 ? 'tool' : 'tools'} active
+                </span>
+              </div>
+            </button>
           </div>
 
-          <div className="flex items-center gap-2 text-[12px] text-secondary shrink-0">
-            <span>Max steps</span>
-            <input
-              type="number"
-              min={1}
-              max={15}
-              value={maxIterations}
-              onChange={(e) =>
-                setMaxIterations(Math.max(1, Number(e.target.value) || 5))
-              }
-              className="w-14 h-7 rounded-md border border-subtle bg-app px-2 text-center font-mono text-[12px] text-primary"
-            />
+          <div className="flex items-center gap-2">
+            {/* Conditional Key Badge: ONLY shown when there's an issue or key required */}
+            {presetProvider &&
+              (hasProviderNeedsAttention(presetProvider) ||
+                (!hasVaultKey && !hasActiveSessionKey)) && (
+                <button
+                  type="button"
+                  onClick={() => setPendingKeyProvider(presetProvider)}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-warning/15 text-warning border border-warning/30 hover:bg-warning/25 transition-all cursor-pointer animate-pulse"
+                  title="Configure required API key"
+                >
+                  <AlertTriangle size={12} />
+                  <span>
+                    {getProviderDisplayName(presetProvider)}:{' '}
+                    {hasProviderNeedsAttention(presetProvider)
+                      ? 'Needs attention'
+                      : 'Key required'}
+                  </span>
+                </button>
+              )}
+
+            {/* Consolidated Tools Pill */}
+            <button
+              type="button"
+              onClick={() => setIsToolsDrawerOpen(true)}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] font-medium bg-app hover:bg-raised border border-subtle text-primary transition-colors cursor-pointer"
+              title="Inspect attached tools & capabilities"
+            >
+              <Wrench size={13} className="text-secondary" />
+              <span>
+                {(resolvedTools ?? []).length}{' '}
+                {(resolvedTools ?? []).length === 1 ? 'tool' : 'tools'}
+              </span>
+              <ChevronDown size={11} className="text-muted" />
+            </button>
           </div>
         </div>
 
         {/* Message Thread */}
-        <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
-          {renderRuntimeError()}
+        <div className="relative flex-1 min-h-0 flex flex-col">
+          <div
+            ref={messageContainerRef}
+            onScroll={handleMessageScroll}
+            className="flex-1 overflow-y-auto no-scrollbar px-6 py-6 space-y-6"
+          >
+            {renderRuntimeError()}
 
-          {displayedMessages.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-center py-16 space-y-1.5">
-              <p className="text-[14px] font-medium text-primary">
-                Start a conversation with {selectedAgent?.name}
-              </p>
-              <p className="text-[13px] text-secondary max-w-sm">
-                Press Enter to send a message, or Shift + Enter for a new line.
-              </p>
-            </div>
-          ) : (
-            displayedMessages.map((msg) =>
-              msg.role === 'user' ? (
-                <div key={msg.id} className="flex justify-end">
-                  <div className="max-w-xl rounded-xl border border-subtle bg-raised px-4 py-2.5 text-[14px] text-primary whitespace-pre-wrap leading-relaxed">
-                    {msg.content}
-                  </div>
-                </div>
-              ) : (
-                <div key={msg.id} className="w-full space-y-3">
-                  <div className="text-[12px] font-medium text-secondary">
-                    {selectedAgent?.name ?? 'Assistant'}
-                  </div>
-
-                  {msg.toolCalls && msg.toolCalls.length > 0 && (
-                    <div className="space-y-2">
-                      {msg.toolCalls.map((tc) => (
-                        <ChatToolCallCard key={tc.id} toolCall={tc} />
-                      ))}
+            {displayedMessages.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-center py-16 space-y-1.5">
+                <p className="text-[14px] font-medium text-primary">
+                  Start a conversation with {selectedAgent?.name}
+                </p>
+                <p className="text-[13px] text-secondary max-w-sm">
+                  Press Enter to send a message, or Shift + Enter for a new line.
+                </p>
+              </div>
+            ) : (
+              displayedMessages.map((msg) =>
+                msg.role === 'user' ? (
+                  <div key={msg.id} className="flex justify-end">
+                    <div className="max-w-xl rounded-xl border border-subtle bg-raised px-4 py-2.5 text-[14px] text-primary whitespace-pre-wrap leading-relaxed">
+                      {msg.content}
                     </div>
-                  )}
+                  </div>
+                ) : (
+                  <div key={msg.id} className="w-full space-y-3">
+                    <div className="text-[12px] font-medium text-secondary flex items-center gap-1.5">
+                      <BlobbieAvatar
+                        config={selectedAgent?.avatar ?? selectedAgent?.name}
+                        size="xs"
+                        interactive={false}
+                      />
+                      <span>{selectedAgent?.name ?? 'Assistant'}</span>
+                    </div>
 
-                  {msg.content && <MarkdownRenderer content={msg.content} />}
-                </div>
+                    {msg.toolCalls && msg.toolCalls.length > 0 && (
+                      <div className="space-y-2">
+                        {msg.toolCalls.map((tc) => (
+                          <ChatToolCallCard key={tc.id} toolCall={tc} />
+                        ))}
+                      </div>
+                    )}
+
+                    {msg.content && <MarkdownRenderer content={msg.content} />}
+                  </div>
+                )
               )
-            )
+            )}
+          </div>
+
+          {/* Floating Scroll to Bottom Indicator */}
+          {showScrollBottom && (
+            <button
+              type="button"
+              onClick={scrollToBottom}
+              className="absolute bottom-3 right-6 z-10 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card/95 hover:bg-raised border border-subtle text-[12px] font-medium text-primary shadow-raised transition-all backdrop-blur-md cursor-pointer animate-fade-in"
+              title="Jump to latest message"
+            >
+              <ArrowDown size={13} className="text-accent" />
+              <span>Scroll to bottom</span>
+            </button>
           )}
         </div>
 
@@ -588,6 +644,8 @@ export function ChatPage() {
                 rows={1}
                 value={promptInput}
                 onChange={(e) => setPromptInput(e.target.value)}
+                onFocus={() => setIsComposerFocused(true)}
+                onBlur={() => setIsComposerFocused(false)}
                 onKeyDown={handleComposerKeyDown}
                 disabled={isStreaming || !selectedAgent}
                 placeholder="Ask anything... (Enter to send, Shift+Enter for newline)"
@@ -621,6 +679,188 @@ export function ChatPage() {
           </form>
         </div>
       </div>
+
+      {/* Attached Capabilities Drawer */}
+      <Drawer
+        open={isToolsDrawerOpen}
+        onClose={() => setIsToolsDrawerOpen(false)}
+        title="Attached Tools & Capabilities"
+        description={`Capabilities equipped on ${selectedAgent?.name ?? 'agent'} for execution in conversation.`}
+        width="lg"
+      >
+        <div className="space-y-4">
+          <div className="flex items-center justify-between text-[13px] font-semibold text-primary">
+            <span>
+              Client & Sandboxed Tools ({(resolvedTools ?? []).length})
+            </span>
+            <Link
+              to="/tools"
+              className="text-accent text-[12px] font-normal hover:underline"
+            >
+              Manage tools catalog →
+            </Link>
+          </div>
+
+          {(resolvedTools ?? []).length === 0 ? (
+            <p className="text-[13px] text-muted p-4 text-center border border-dashed border-subtle rounded-xl">
+              No tools attached to this agent.
+            </p>
+          ) : (
+            <div className="space-y-2.5">
+              {(resolvedTools ?? []).map((rt) => (
+                <div
+                  key={rt.tool.id}
+                  className="p-3 rounded-xl border border-subtle bg-app flex flex-col gap-1.5"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[13px] font-semibold text-primary font-mono">
+                        {rt.tool.name}
+                      </span>
+                      <Badge variant="neutral" mono>
+                        v{rt.version.version}
+                      </Badge>
+                    </div>
+                    <Badge
+                      variant={rt.executableInBrowser ? 'success' : 'muted'}
+                    >
+                      {rt.executableInBrowser
+                        ? 'Sandboxed execution'
+                        : 'Non-executable'}
+                    </Badge>
+                  </div>
+                  {rt.tool.description && (
+                    <p className="text-[12px] text-secondary">
+                      {rt.tool.description}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {selectedAgent?.attachedConnectors &&
+            selectedAgent.attachedConnectors.length > 0 && (
+              <div className="space-y-2.5 pt-4 border-t border-subtle">
+                <span className="text-[13px] font-semibold text-primary">
+                  Connectors ({selectedAgent.attachedConnectors.length})
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {selectedAgent.attachedConnectors.map((conn) => (
+                    <Badge key={conn} variant="muted" mono>
+                      {conn}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+        </div>
+      </Drawer>
+
+      {/* Persona Details Inspector Drawer */}
+      <Drawer
+        open={isInspectorOpen}
+        onClose={() => setIsInspectorOpen(false)}
+        title="Agent Persona & Execution Settings"
+        description="Inspect persona identity, instructions, credentials, and parameters."
+        width="lg"
+      >
+        <div className="space-y-6">
+          {/* Avatar Hero */}
+          <div className="flex items-center gap-4 p-4 rounded-2xl bg-app border border-subtle">
+            <BlobbieAvatar
+              config={selectedAgent?.avatar ?? selectedAgent?.name}
+              size={80}
+              interactive={true}
+              title="Click to bounce"
+            />
+            <div className="space-y-1 min-w-0">
+              <h3 className="text-[16px] font-semibold text-primary truncate">
+                {selectedAgent?.name}
+              </h3>
+              <p className="text-[12px] text-secondary">
+                {selectedAgent?.description || 'No role description provided.'}
+              </p>
+              <div className="flex items-center gap-2 pt-1">
+                <Badge variant="neutral">
+                  Created{' '}
+                  {new Date(
+                    selectedAgent?.createdAt ?? ''
+                  ).toLocaleDateString()}
+                </Badge>
+              </div>
+            </div>
+          </div>
+
+          {/* Reasoning Steps */}
+          <div className="space-y-2">
+            <h4 className="text-[13px] font-semibold text-primary">
+              Execution Control
+            </h4>
+            <div className="flex items-center justify-between p-3 rounded-xl border border-subtle bg-app">
+              <div>
+                <span className="text-[13px] font-medium text-primary block">
+                  Max Reasoning Steps
+                </span>
+                <span className="text-[11px] text-secondary">
+                  Maximum tool iterations allowed per chat turn
+                </span>
+              </div>
+              <input
+                type="number"
+                min={1}
+                max={15}
+                value={maxIterations}
+                onChange={(e) =>
+                  setMaxIterations(Math.max(1, Number(e.target.value) || 5))
+                }
+                className="w-16 h-8 rounded-md border border-subtle bg-card px-2 text-center font-mono text-[13px] text-primary"
+              />
+            </div>
+          </div>
+
+          {/* Working Instructions */}
+          <div className="space-y-2">
+            <h4 className="text-[13px] font-semibold text-primary">
+              Working Instructions (System Prompt)
+            </h4>
+            <div className="p-3.5 rounded-xl border border-subtle bg-app text-[12px] font-mono whitespace-pre-wrap text-secondary max-h-52 overflow-y-auto leading-relaxed">
+              {selectedAgent?.systemPrompt}
+            </div>
+          </div>
+
+          {/* Cognitive Engine & Credentials */}
+          <div className="space-y-2">
+            <h4 className="text-[13px] font-semibold text-primary">
+              Cognitive Engine & Authentication
+            </h4>
+            <div className="p-3 rounded-xl border border-subtle bg-app space-y-2">
+              <div className="flex items-center justify-between text-[12px]">
+                <span className="text-secondary">Model Architecture:</span>
+                <span className="font-mono text-primary font-medium">
+                  {activePreset
+                    ? `${activePreset.provider} · ${activePreset.model_id}`
+                    : 'Default model'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-[12px]">
+                <span className="text-secondary">API Key Status:</span>
+                <span>
+                  {hasVaultKey ? (
+                    <Badge variant="success">Vault Key Verified</Badge>
+                  ) : hasActiveSessionKey ? (
+                    <Badge variant="info">Session Key Active</Badge>
+                  ) : presetProvider ? (
+                    <Badge variant="warning">No Key Configured</Badge>
+                  ) : (
+                    <Badge variant="neutral">Not Required</Badge>
+                  )}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Drawer>
 
       <ConfirmDialog
         open={deleteTarget !== null}

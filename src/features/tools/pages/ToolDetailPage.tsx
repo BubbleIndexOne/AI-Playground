@@ -163,6 +163,29 @@ export function ToolDetailPage() {
     );
   };
 
+  const currentTestResults =
+    currentVersion?.test_results_json ?? tool.current_version?.test_results_json;
+
+  const failureDetail =
+    currentTestResults?.details &&
+    typeof currentTestResults.details === 'object' &&
+    'error' in (currentTestResults.details as Record<string, unknown>)
+      ? String((currentTestResults.details as Record<string, unknown>).error)
+      : null;
+
+  const resolvedRejectionReason =
+    tool.rejection_reason ||
+    tool.reason ||
+    (currentTestResults?.status === 'failed' && currentTestResults.reason
+      ? failureDetail
+        ? `${currentTestResults.reason}: ${failureDetail}`
+        : currentTestResults.reason
+      : null) ||
+    allVersions.find(
+      (v) => v.test_results_json?.status === 'failed' && v.test_results_json?.reason
+    )?.test_results_json?.reason ||
+    null;
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -189,7 +212,7 @@ export function ToolDetailPage() {
 
       <ToolLifecycleStepper
         status={tool.status}
-        rejectionReason={tool.rejection_reason ?? tool.reason}
+        rejectionReason={resolvedRejectionReason}
       />
 
       <Tabs<ToolTab>
@@ -223,6 +246,14 @@ export function ToolDetailPage() {
                 {
                   key: 'Browser execution',
                   value: tool.allow_client_execution ? 'Allowed' : 'Disabled',
+                },
+                {
+                  key: 'MCP Hosting',
+                  value: tool.is_mcp_hosted
+                    ? 'Active MCP Server'
+                    : tool.mcp_hosting_status && tool.mcp_hosting_status !== 'none'
+                      ? `Evaluation: ${tool.mcp_hosting_status}`
+                      : 'None',
                 },
                 {
                   key: 'Visibility',

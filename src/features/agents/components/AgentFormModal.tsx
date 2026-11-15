@@ -1,4 +1,13 @@
-import { AlertTriangle, CheckCircle2, KeyRound, Search } from 'lucide-react';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  KeyRound,
+  Search,
+  SlidersHorizontal,
+} from 'lucide-react';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ConnectorType } from '../../../domain/enums';
@@ -8,10 +17,15 @@ import {
 } from '../../../domain/providers';
 import {
   Badge,
+  BlobbieAvatar,
+  BLOBBIE_PALETTE,
+  BlobbieConfig,
   Button,
   Checkbox,
   Drawer,
   FormField,
+  fromSeed,
+  generateRandomBlobbie,
   Input,
   Select,
   Textarea,
@@ -56,6 +70,17 @@ export function AgentFormModal({
   );
   const [toolSearch, setToolSearch] = useState('');
 
+  // 3-Avatar Carousel States
+  const [currentAvatar, setCurrentAvatar] = useState<BlobbieConfig>(() =>
+    generateRandomBlobbie()
+  );
+  const [nextAvatar, setNextAvatar] = useState<BlobbieConfig>(() =>
+    generateRandomBlobbie()
+  );
+  const [prevAvatar, setPrevAvatar] = useState<BlobbieConfig | null>(null);
+  const [historyStack, setHistoryStack] = useState<BlobbieConfig[]>([]);
+  const [showAdvancedCustomizer, setShowAdvancedCustomizer] = useState(false);
+
   useEffect(() => {
     if (!open) return;
     if (initialAgent) {
@@ -65,16 +90,60 @@ export function AgentFormModal({
       setModelPresetId(initialAgent.modelPresetId);
       setAttachedTools([...initialAgent.attachedTools]);
       setAttachedConnectors([...initialAgent.attachedConnectors]);
+
+      const initialAv =
+        initialAgent.avatar ?? fromSeed(initialAgent.name || initialAgent.id);
+      setCurrentAvatar(initialAv);
+      setNextAvatar(generateRandomBlobbie());
+      setPrevAvatar(null);
+      setHistoryStack([]);
     } else {
       setName('');
       setDescription('');
-      setSystemPrompt('You are a helpful AI assistant.');
+      setSystemPrompt('');
       setModelPresetId(presets?.[0]?.id ?? '');
       setAttachedTools([]);
       setAttachedConnectors([]);
+
+      const initialAv = generateRandomBlobbie();
+      setCurrentAvatar(initialAv);
+      setNextAvatar(generateRandomBlobbie());
+      setPrevAvatar(null);
+      setHistoryStack([]);
     }
+    setShowAdvancedCustomizer(false);
     setToolSearch('');
   }, [open, initialAgent, presets]);
+
+  // Handle advancing to next randomized avatar in the stream
+  const handleAdvanceNext = () => {
+    setHistoryStack((prev) => [...prev, currentAvatar]);
+    setPrevAvatar(currentAvatar);
+    setCurrentAvatar(nextAvatar);
+    setNextAvatar(generateRandomBlobbie());
+  };
+
+  // Handle stepping back to previous avatar
+  const handleStepBack = () => {
+    if (historyStack.length === 0) return;
+    const previous = historyStack[historyStack.length - 1];
+    const newStack = historyStack.slice(0, -1);
+    setNextAvatar(currentAvatar);
+    setCurrentAvatar(previous);
+    setPrevAvatar(newStack.length > 0 ? newStack[newStack.length - 1] : null);
+    setHistoryStack(newStack);
+  };
+
+  // Fine-tuning handler for specific parameters
+  const updateCurrentAvatarParam = (
+    key: keyof BlobbieConfig,
+    value: number | string
+  ) => {
+    setCurrentAvatar((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+  };
 
   const selectedPreset = useMemo(
     () => (presets ?? []).find((p) => p.id === modelPresetId) ?? null,
@@ -130,12 +199,15 @@ export function AgentFormModal({
         id: initialAgent?.id,
         name: name.trim(),
         description: description.trim(),
-        systemPrompt,
+        systemPrompt:
+          systemPrompt.trim() ||
+          'You are a helpful and knowledgeable AI assistant. Respond with clarity, precision, and thoroughness.',
         modelPresetId,
         attachedTools,
         attachedConnectors,
+        avatar: currentAvatar,
       });
-      toast.success(initialAgent ? 'Agent updated' : 'Agent created');
+      toast.success(initialAgent ? 'Agent profile updated' : 'Agent created');
       onClose();
     } catch (err) {
       toast.error(
@@ -149,8 +221,8 @@ export function AgentFormModal({
     <Drawer
       open={open}
       onClose={onClose}
-      title={initialAgent ? 'Edit agent' : 'Create agent'}
-      description="Configure identity, instructions, model parameters, and attached capabilities."
+      title={initialAgent ? 'Edit Agent Profile' : 'Create Digital Teammate'}
+      description="Build a living AI colleague with a unique persona, avatar, instructions, and tools."
       width="xl"
       footer={
         <>
@@ -163,7 +235,7 @@ export function AgentFormModal({
             form="agent-drawer-form"
             loading={saveAgentMutation.isPending}
           >
-            {initialAgent ? 'Save changes' : 'Create agent'}
+            {initialAgent ? 'Save profile' : 'Create teammate'}
           </Button>
         </>
       }
@@ -173,37 +245,269 @@ export function AgentFormModal({
         onSubmit={handleSubmit}
         className="space-y-6"
       >
-        {/* Section 1: Identity */}
-        <section className="space-y-4">
-          <h3 className="text-[14px] font-semibold text-primary">Identity</h3>
+        {/* Section 1: 3-Avatar Live Stage */}
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-[14px] font-semibold text-primary">
+              Living Avatar Persona
+            </h3>
+            <span className="text-[12px] text-secondary">
+              Follows cursor & reacts to touch
+            </span>
+          </div>
+
+          <div className="rounded-2xl border border-subtle bg-app/40 p-4 flex flex-col items-center gap-3">
+            <div className="flex items-center justify-center gap-4 sm:gap-8 w-full py-2">
+              {/* Left slot: Skipped / Previous */}
+              <div className="flex flex-col items-center gap-1.5 w-24">
+                {prevAvatar ? (
+                  <button
+                    type="button"
+                    onClick={handleStepBack}
+                    className="group relative flex flex-col items-center justify-center p-2 rounded-xl border border-dashed border-subtle bg-card/60 hover:bg-raised hover:border-accent transition-all cursor-pointer"
+                    title="Restore previous avatar"
+                  >
+                    <BlobbieAvatar config={prevAvatar} size={56} interactive={false} />
+                    <span className="flex items-center gap-0.5 text-[11px] font-medium text-secondary group-hover:text-primary mt-1">
+                      <ChevronLeft size={12} /> Back
+                    </span>
+                  </button>
+                ) : (
+                  <div className="flex flex-col items-center justify-center w-20 h-24 rounded-xl border border-dashed border-subtle/50 text-muted/60 text-center p-2 select-none">
+                    <span className="text-[10px] leading-tight">
+                      Previous will appear here
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Center slot: Active Chosen Living Avatar */}
+              <div className="flex flex-col items-center">
+                <div className="relative p-2.5 rounded-full bg-gradient-to-b from-card to-raised border-2 border-accent/40 shadow-raised flex items-center justify-center">
+                  <BlobbieAvatar
+                    config={currentAvatar}
+                    size={130}
+                    interactive={true}
+                    title="Active chosen avatar · Click to bounce"
+                  />
+                </div>
+                <span className="mt-2 text-[12px] font-semibold text-primary">
+                  Active Persona
+                </span>
+                <span className="text-[11px] text-secondary">
+                  Looking at you · Click to bounce
+                </span>
+              </div>
+
+              {/* Right slot: Next in line candidate */}
+              <div className="flex flex-col items-center gap-1.5 w-24">
+                <button
+                  type="button"
+                  onClick={handleAdvanceNext}
+                  className="group relative flex flex-col items-center justify-center p-2 rounded-xl border border-dashed border-subtle bg-card/60 hover:bg-raised hover:border-accent transition-all cursor-pointer"
+                  title="Advance to next randomized avatar"
+                >
+                  <BlobbieAvatar config={nextAvatar} size={56} interactive={false} />
+                  <span className="flex items-center gap-0.5 text-[11px] font-medium text-secondary group-hover:text-primary mt-1">
+                    Next <ChevronRight size={12} />
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            {/* Advanced Fine-Tuning Toggle */}
+            <button
+              type="button"
+              onClick={() => setShowAdvancedCustomizer((v) => !v)}
+              className="inline-flex items-center gap-1.5 text-[12px] font-medium text-secondary hover:text-primary transition-colors cursor-pointer mt-1"
+            >
+              <SlidersHorizontal size={13} />
+              <span>
+                {showAdvancedCustomizer
+                  ? 'Hide fine-tuning controls'
+                  : 'Fine-tune avatar features'}
+              </span>
+              <ChevronDown
+                size={12}
+                className={`transition-transform duration-200 ${
+                  showAdvancedCustomizer ? 'rotate-180' : ''
+                }`}
+              />
+            </button>
+
+            {/* Collapsible Fine-Tuning Controls */}
+            {showAdvancedCustomizer && (
+              <div className="w-full pt-4 border-t border-subtle space-y-4">
+                {/* Palette Swatches */}
+                <div className="space-y-1.5">
+                  <span className="text-[11px] font-medium text-secondary">
+                    Color Palette
+                  </span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {BLOBBIE_PALETTE.map((color) => (
+                      <button
+                        key={color}
+                        type="button"
+                        onClick={() => updateCurrentAvatarParam('color', color)}
+                        className={`w-6 h-6 rounded-full border-2 transition-transform hover:scale-110 cursor-pointer ${
+                          currentAvatar.color === color
+                            ? 'border-primary ring-2 ring-accent'
+                            : 'border-subtle'
+                        }`}
+                        style={{ backgroundColor: color }}
+                        aria-label={`Color ${color}`}
+                      />
+                    ))}
+                    <input
+                      type="color"
+                      value={currentAvatar.color}
+                      onChange={(e) =>
+                        updateCurrentAvatarParam('color', e.target.value)
+                      }
+                      className="w-7 h-7 p-0 rounded-full border border-subtle cursor-pointer bg-transparent"
+                      title="Custom color"
+                    />
+                  </div>
+                </div>
+
+                {/* Sliders Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-[11px]">
+                  <label className="flex flex-col gap-1 text-secondary">
+                    <span>Silhouette</span>
+                    <select
+                      value={currentAvatar.sides}
+                      onChange={(e) =>
+                        updateCurrentAvatarParam('sides', Number(e.target.value))
+                      }
+                      className="rounded border border-subtle bg-card px-2 py-1 text-primary text-[12px]"
+                    >
+                      <option value={0}>Circle</option>
+                      <option value={3}>Triangle</option>
+                      <option value={4}>Square</option>
+                      <option value={5}>Pentagon</option>
+                      <option value={6}>Hexagon</option>
+                    </select>
+                  </label>
+
+                  <label className="flex flex-col gap-1 text-secondary">
+                    <span>Roundness</span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      value={currentAvatar.round}
+                      onChange={(e) =>
+                        updateCurrentAvatarParam('round', Number(e.target.value))
+                      }
+                      className="accent-accent"
+                    />
+                  </label>
+
+                  <label className="flex flex-col gap-1 text-secondary">
+                    <span>Eye Size</span>
+                    <input
+                      type="range"
+                      min={0.6}
+                      max={1.4}
+                      step={0.01}
+                      value={currentAvatar.es}
+                      onChange={(e) =>
+                        updateCurrentAvatarParam('es', Number(e.target.value))
+                      }
+                      className="accent-accent"
+                    />
+                  </label>
+
+                  <label className="flex flex-col gap-1 text-secondary">
+                    <span>Eye Tilt</span>
+                    <input
+                      type="range"
+                      min={-0.5}
+                      max={0.7}
+                      step={0.01}
+                      value={currentAvatar.tilt}
+                      onChange={(e) =>
+                        updateCurrentAvatarParam('tilt', Number(e.target.value))
+                      }
+                      className="accent-accent"
+                    />
+                  </label>
+
+                  <label className="flex flex-col gap-1 text-secondary">
+                    <span>Eye Spacing</span>
+                    <input
+                      type="range"
+                      min={0.15}
+                      max={0.55}
+                      step={0.01}
+                      value={currentAvatar.sp}
+                      onChange={(e) =>
+                        updateCurrentAvatarParam('sp', Number(e.target.value))
+                      }
+                      className="accent-accent"
+                    />
+                  </label>
+
+                  <label className="flex flex-col gap-1 text-secondary">
+                    <span>Teardrop Tip</span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={0.6}
+                      step={0.01}
+                      value={currentAvatar.point}
+                      onChange={(e) =>
+                        updateCurrentAvatarParam('point', Number(e.target.value))
+                      }
+                      className="accent-accent"
+                    />
+                  </label>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* Section 2: Human-Centric Identity */}
+        <section className="space-y-4 pt-4 border-t border-subtle">
+          <h3 className="text-[14px] font-semibold text-primary">
+            Profile & Persona
+          </h3>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <FormField label="Name" required>
+            <FormField
+              label="Full Name & Codename"
+              required
+              hint="Give your teammate a distinct identity."
+            >
               <Input
                 type="text"
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Research assistant"
+                placeholder="e.g. Dr. Elena Vance or Marcus Chen (Security Lead)"
               />
             </FormField>
-            <FormField label="Description">
+
+            <FormField
+              label="Role & Mission"
+              hint="Summarize this teammate's primary operational focus."
+            >
               <Input
                 type="text"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Summarizes documents and runs tools"
+                placeholder="e.g. Lead Code Auditor specializing in TypeScript concurrency & edge cases"
               />
             </FormField>
           </div>
-        </section>
 
-        {/* Section 2: System prompt */}
-        <section className="space-y-3 pt-4 border-t border-subtle">
           <FormField
-            label="System prompt"
-            required
+            label="Working Instructions & Operating Principles"
+            hint="Guide how this agent reasons, formats responses, and handles edge cases."
             rightLabel={
-              <span className="font-mono tabular-nums">
+              <span className="font-mono tabular-nums text-muted text-[11px]">
                 {systemPrompt.length} chars
               </span>
             }
@@ -211,27 +515,28 @@ export function AgentFormModal({
             <Textarea
               mono
               autoGrow
-              rows={5}
-              required
+              rows={4}
               value={systemPrompt}
               onChange={(e) => setSystemPrompt(e.target.value)}
-              placeholder="Write instructions for how the agent should reason and respond..."
+              placeholder="e.g. You are Marcus, a seasoned principal software engineer. You communicate with clarity, question unverified assumptions, and always provide working, verified code with edge-case considerations..."
             />
           </FormField>
         </section>
 
-        {/* Section 3: Model */}
+        {/* Section 3: Cognitive Model Engine */}
         <section className="space-y-3 pt-4 border-t border-subtle">
-          <h3 className="text-[14px] font-semibold text-primary">Model</h3>
+          <h3 className="text-[14px] font-semibold text-primary">
+            Cognitive Model Engine
+          </h3>
           <FormField
-            label="Model preset"
-            hint="Defines provider, model ID, and sampling parameters."
+            label="Model Preset"
+            hint="Defines the provider, model architecture, and execution parameters."
           >
             <Select
               value={modelPresetId}
               onChange={(e) => setModelPresetId(e.target.value)}
             >
-              <option value="">Select a model preset...</option>
+              <option value="">Default (Automatic: based on active keys)</option>
               {(presets ?? []).map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name} ({p.provider} · {p.model_id})
@@ -247,7 +552,7 @@ export function AgentFormModal({
                   <>
                     <CheckCircle2 size={14} className="text-success shrink-0" />
                     <span className="text-primary font-medium">
-                      {getProviderDisplayName(selectedProvider)}: saved key
+                      {getProviderDisplayName(selectedProvider)}: key verified
                     </span>
                   </>
                 ) : (
@@ -266,7 +571,7 @@ export function AgentFormModal({
                 className="inline-flex items-center gap-1 font-medium text-accent hover:underline"
               >
                 <KeyRound size={12} />
-                API Keys
+                Manage API Keys
               </Link>
             </div>
           ) : (
@@ -284,11 +589,11 @@ export function AgentFormModal({
           )}
         </section>
 
-        {/* Section 4: Tools */}
+        {/* Section 4: Assigned Equipment & Tools */}
         <section className="space-y-3 pt-4 border-t border-subtle">
           <div className="flex items-center justify-between gap-4">
             <h3 className="text-[14px] font-semibold text-primary">
-              Tools ({attachedTools.length} selected)
+              Assigned Equipment & Tools ({attachedTools.length} active)
             </h3>
             <div className="w-56">
               <Input
@@ -296,7 +601,7 @@ export function AgentFormModal({
                 leftIcon={<Search size={14} />}
                 value={toolSearch}
                 onChange={(e) => setToolSearch(e.target.value)}
-                placeholder="Filter tools..."
+                placeholder="Search tools..."
               />
             </div>
           </div>
@@ -352,7 +657,9 @@ export function AgentFormModal({
 
         {/* Section 5: Connectors */}
         <section className="space-y-3 pt-4 border-t border-subtle">
-          <h3 className="text-[14px] font-semibold text-primary">Connectors</h3>
+          <h3 className="text-[14px] font-semibold text-primary">
+            Integrations & Connectors
+          </h3>
           <div className="flex flex-wrap items-center gap-6">
             {[ConnectorType.Postgres, ConnectorType.Slack].map((connType) => (
               <Checkbox

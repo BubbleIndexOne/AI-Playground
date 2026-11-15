@@ -101,6 +101,15 @@ const RawToolSchema = z
       .boolean()
       .nullish()
       .transform((v) => Boolean(v)),
+    is_mcp_hosted: z
+      .boolean()
+      .nullish()
+      .transform((v) => Boolean(v)),
+    mcp_hosting_status: z
+      .enum(['none', 'requested', 'in_review', 'approved', 'rejected'])
+      .or(z.string())
+      .nullish()
+      .transform((v) => v ?? 'none'),
     rejection_reason: z.string().nullish(),
     reason: z.string().nullish(),
     owner_id: z.string().optional(),
@@ -119,13 +128,34 @@ const RawToolSchema = z
 
 export const ToolSchema = z.preprocess((val) => {
   if (val && typeof val === 'object' && !Array.isArray(val)) {
-    const rec = val as Record<string, unknown>;
+    let rec = val as Record<string, unknown>;
     if (rec.tool && typeof rec.tool === 'object' && !Array.isArray(rec.tool)) {
-      return rec.tool;
+      rec = rec.tool as Record<string, unknown>;
+    } else if (rec.data && typeof rec.data === 'object' && !Array.isArray(rec.data)) {
+      rec = rec.data as Record<string, unknown>;
     }
-    if (rec.data && typeof rec.data === 'object' && !Array.isArray(rec.data)) {
-      return rec.data;
+
+    if (
+      !rec.current_version &&
+      (rec.current_version_number !== undefined || rec.current_version_id)
+    ) {
+      rec = {
+        ...rec,
+        current_version: {
+          id: rec.current_version_id,
+          tool_id: rec.id,
+          version: rec.current_version_number,
+          version_number: rec.current_version_number,
+          code: rec.current_code,
+          schema_json: rec.current_schema_json ?? {},
+          capabilities_json: rec.current_capabilities_json ?? [],
+          code_hash: rec.current_code_hash,
+          test_results_json: rec.current_test_results_json,
+          created_at: rec.current_version_created_at,
+        },
+      };
     }
+    return rec;
   }
   return val;
 }, RawToolSchema);

@@ -56,13 +56,20 @@ export function ConnectorsPage() {
     setDeleteTarget(null);
   };
 
+  const [testingType, setTestingType] = useState<ConnectorType | null>(null);
+
   const handleTestStored = async (type: ConnectorType) => {
-    const res = await testMutation.mutateAsync({ type });
-    setTestResults((prev) => ({ ...prev, [type]: res }));
-    if (res.ok) {
-      toast.success('Connection verified', res.message ?? `${type} responded.`);
-    } else {
-      toast.error('Connection test failed', res.message ?? 'Check your credentials.');
+    setTestingType(type);
+    try {
+      const res = await testMutation.mutateAsync({ type });
+      setTestResults((prev) => ({ ...prev, [type]: res }));
+      if (res.ok) {
+        toast.success('Connection verified', res.message ?? `${type} responded.`);
+      } else {
+        toast.error('Connection test failed', res.message ?? 'Check your credentials.');
+      }
+    } finally {
+      setTestingType(null);
     }
   };
 
@@ -82,9 +89,12 @@ export function ConnectorsPage() {
           {CONNECTOR_ITEMS.map((item) => {
             const existing = connectorByType.get(item.type);
             const isConfigured = Boolean(existing);
-            const previewEntries = existing?.preview
-              ? Object.entries(existing.preview)
-              : [];
+            const previewText =
+              typeof existing?.preview === 'string'
+                ? existing.preview
+                : existing?.preview && typeof existing.preview === 'object'
+                  ? JSON.stringify(existing.preview)
+                  : null;
             const testResult = testResults[item.type];
 
             return (
@@ -123,9 +133,9 @@ export function ConnectorsPage() {
 
                   {isConfigured && existing ? (
                     <div className="rounded-lg border border-subtle bg-app p-3 space-y-2">
-                      {previewEntries.length > 0 ? (
+                      {previewText ? (
                         <div className="text-[12px] font-mono text-primary break-all">
-                          {JSON.stringify(existing.preview)}
+                          {previewText}
                         </div>
                       ) : (
                         <div className="text-[12px] text-secondary">
@@ -180,7 +190,8 @@ export function ConnectorsPage() {
                         variant="secondary"
                         size="sm"
                         onClick={() => handleTestStored(item.type)}
-                        loading={testMutation.isPending}
+                        loading={testMutation.isPending && testingType === item.type}
+                        disabled={testMutation.isPending && testingType !== item.type}
                       >
                         <Play className="w-3.5 h-3.5" />
                         Test

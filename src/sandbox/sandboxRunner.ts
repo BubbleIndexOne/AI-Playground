@@ -24,97 +24,51 @@ function buildIframeSrcDoc(): string {
 <head><meta charset="utf-8" /></head>
 <body>
 <script>
-  let activeWorker = null;
-  window.addEventListener('message', (event) => {
+  window.addEventListener('message', async (event) => {
     const msg = event.data;
     if (!msg || msg.channel !== 'agent-playground-sandbox' || msg.type !== 'EXECUTE_TOOL') return;
 
     const { requestId, workerPreamble, userCode, params } = msg;
     const startMs = performance.now();
-
-    const userBlob = new Blob([userCode], { type: 'text/javascript' });
-    const userBlobUrl = URL.createObjectURL(userBlob);
-
-    const runnerSource = \`
-      const __observedCalls = [];
-      function __recordCall(entry) {
-        __observedCalls.push(entry);
-      }
-      \${workerPreamble}
-
-      self.onmessage = async (e) => {
-        const { userBlobUrl, params } = e.data;
-        try {
-          const mod = await import(userBlobUrl);
-          if (typeof mod.default !== 'function') {
-            throw new Error('Tool module must export a default function: export default async function run(params)');
-          }
-          const output = await mod.default(params);
-          self.postMessage({ ok: true, result: output, observedCalls: __observedCalls });
-        } catch (err) {
-          self.postMessage({
-            ok: false,
-            error: err && err.message ? err.message : String(err),
-            observedCalls: __observedCalls
-          });
-        }
-      };
-    \`;
-
-    const runnerBlob = new Blob([runnerSource], { type: 'text/javascript' });
-    const runnerBlobUrl = URL.createObjectURL(runnerBlob);
+    const __observedCalls = [];
+    function __recordCall(entry) {
+      __observedCalls.push(entry);
+    }
 
     try {
-      activeWorker = new Worker(runnerBlobUrl, { type: 'module' });
-      activeWorker.onmessage = (wEvent) => {
-        const durationMs = Math.round(performance.now() - startMs);
-        URL.revokeObjectURL(userBlobUrl);
-        URL.revokeObjectURL(runnerBlobUrl);
-        if (activeWorker) {
-          activeWorker.terminate();
-          activeWorker = null;
-        }
-        parent.postMessage({
-          channel: 'agent-playground-sandbox',
-          type: 'TOOL_RESULT',
-          requestId,
-          ok: Boolean(wEvent.data.ok),
-          result: wEvent.data.result,
-          error: wEvent.data.error,
-          observedCalls: wEvent.data.observedCalls || [],
-          durationMs,
-        }, '*');
-      };
+      if (workerPreamble) {
+        try {
+          const preambleFn = new Function('__recordCall', workerPreamble);
+          preambleFn(__recordCall);
+        } catch {}
+      }
 
-      activeWorker.onerror = (wErr) => {
-        const durationMs = Math.round(performance.now() - startMs);
-        URL.revokeObjectURL(userBlobUrl);
-        URL.revokeObjectURL(runnerBlobUrl);
-        if (activeWorker) {
-          activeWorker.terminate();
-          activeWorker = null;
-        }
-        parent.postMessage({
-          channel: 'agent-playground-sandbox',
-          type: 'TOOL_RESULT',
-          requestId,
-          ok: false,
-          error: wErr.message || 'Module worker syntax or runtime error',
-          observedCalls: [],
-          durationMs,
-        }, '*');
-      };
+      const cleaned = userCode
+        .replace(/export\\s+default\\s+async\\s+function\\s*([a-zA-Z0-9_]*)\\s*\\(/, 'async function __tool_run(')
+        .replace(/export\\s+default\\s+function\\s*([a-zA-Z0-9_]*)\\s*\\(/, 'function __tool_run(');
 
-      activeWorker.postMessage({ userBlobUrl, params });
-    } catch (spawnErr) {
+      const fn = new Function('params', '__recordCall', cleaned + '\\nreturn __tool_run(params);');
+      const output = await fn(params, __recordCall);
+      const durationMs = Math.round(performance.now() - startMs);
+
+      parent.postMessage({
+        channel: 'agent-playground-sandbox',
+        type: 'TOOL_RESULT',
+        requestId,
+        ok: true,
+        result: output,
+        observedCalls: __observedCalls,
+        durationMs,
+      }, '*');
+    } catch (err) {
       const durationMs = Math.round(performance.now() - startMs);
       parent.postMessage({
         channel: 'agent-playground-sandbox',
         type: 'TOOL_RESULT',
         requestId,
         ok: false,
-        error: spawnErr && spawnErr.message ? spawnErr.message : String(spawnErr),
-        observedCalls: [],
+        error: (err && err.message) ? err.message : String(err),
+        observedCalls: __observedCalls,
         durationMs,
       }, '*');
     }
