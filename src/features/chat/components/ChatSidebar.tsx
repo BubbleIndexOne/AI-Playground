@@ -1,6 +1,6 @@
 import { Edit2, MessageSquare, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import { Button, IconButton, Input } from '../../../shared/ui';
+import { BlobbieAvatar, Button, IconButton, Input } from '../../../shared/ui';
 import { AgentRecord } from '../../../storage/interfaces/AgentRepository';
 import { ChatSessionRecord } from '../../../storage/interfaces/ChatRepository';
 
@@ -66,7 +66,14 @@ export function ChatSidebar({
                     : 'text-muted hover:text-primary hover:bg-hover'
                 }`}
               >
-                <span className="truncate">{agent.name}</span>
+                <div className="flex items-center gap-2 min-w-0">
+                  <BlobbieAvatar
+                    config={agent.avatar ?? agent.name}
+                    size="xs"
+                    interactive={false}
+                  />
+                  <span className="truncate">{agent.name}</span>
+                </div>
                 {isCurrentAgent && (
                   <span className="font-mono text-[11px] text-secondary">
                     {agentChats.length}

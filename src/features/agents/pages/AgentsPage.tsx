@@ -19,6 +19,7 @@ import {
 import { ErrorBanner } from '../../../shared/components/ErrorBanner';
 import {
   Badge,
+  BlobbieAvatar,
   Button,
   Card,
   CardGridSkeleton,
@@ -191,11 +192,23 @@ export function AgentsPage() {
                 padding="md"
                 className="flex flex-col justify-between gap-4"
               >
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <div className="flex items-start justify-between gap-3">
-                    <h2 className="text-[16px] font-semibold text-primary truncate">
-                      {agent.name}
-                    </h2>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <BlobbieAvatar
+                        config={agent.avatar ?? agent.name}
+                        size="lg"
+                        title={agent.name}
+                      />
+                      <div className="min-w-0">
+                        <h2 className="text-[16px] font-semibold text-primary truncate">
+                          {agent.name}
+                        </h2>
+                        <span className="text-[12px] text-secondary">
+                          {agent.attachedTools.length} tools · {agent.attachedConnectors.length} connectors
+                        </span>
+                      </div>
+                    </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       <Button
                         variant="secondary"

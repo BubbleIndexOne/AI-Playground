@@ -1,11 +1,29 @@
 import { z } from 'zod';
 import { ConnectorType } from '../../domain/enums';
+import { BlobbieConfig, fromSeed } from '../../shared/blobbies';
 import {
   AgentRecord,
   AgentRepository,
   SaveAgentInput,
 } from '../interfaces/AgentRepository';
 import { runTransaction, STORES } from './idbHelper';
+
+const BlobbieConfigSchema = z.object({
+  sides: z.number(),
+  round: z.number(),
+  bumps: z.number(),
+  point: z.number(),
+  pa: z.number(),
+  sx: z.number(),
+  sy: z.number(),
+  rot: z.number(),
+  color: z.string(),
+  es: z.number(),
+  tilt: z.number(),
+  sp: z.number(),
+  fx: z.number(),
+  fy: z.number(),
+});
 
 const AgentImportSchema = z.object({
   id: z.string().optional(),
@@ -22,9 +40,15 @@ const AgentImportSchema = z.object({
     )
     .default([]),
   attachedConnectors: z.array(z.nativeEnum(ConnectorType)).default([]),
+  avatar: BlobbieConfigSchema.optional(),
 });
 
 function sanitizeAgentRecord(raw: AgentRecord & Record<string, unknown>): AgentRecord {
+  const avatar =
+    raw.avatar && typeof raw.avatar === 'object'
+      ? (raw.avatar as BlobbieConfig)
+      : fromSeed(raw.name || raw.id || 'agent');
+
   return {
     id: raw.id,
     name: raw.name,
@@ -35,6 +59,7 @@ function sanitizeAgentRecord(raw: AgentRecord & Record<string, unknown>): AgentR
     attachedConnectors: Array.isArray(raw.attachedConnectors)
       ? [...raw.attachedConnectors]
       : [],
+    avatar,
     createdAt: raw.createdAt,
     updatedAt: raw.updatedAt,
   };
@@ -71,6 +96,7 @@ export class IndexedDbAgentRepository implements AgentRepository {
       modelPresetId: input.modelPresetId,
       attachedTools: [...input.attachedTools],
       attachedConnectors: [...input.attachedConnectors],
+      avatar: input.avatar ?? existing?.avatar ?? fromSeed(input.name.trim()),
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
     };
