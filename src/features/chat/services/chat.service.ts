@@ -9,7 +9,7 @@ import {
   ChatMessageRecord,
   ChatSessionRecord,
 } from '../../../storage/interfaces/ChatRepository';
-import { chatRepository } from '../../../storage/local/IndexedDbChatRepository';
+import { remoteChatRepository as chatRepository } from '../../../storage/remote/RemoteChatRepository';
 
 export const chatService = {
   listByAgent(agentId: string): Promise<ChatSessionRecord[]> {

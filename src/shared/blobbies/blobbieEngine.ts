@@ -164,7 +164,21 @@ export function easeInOutCubic(m: number): number {
   return clamped * clamped * (3 - 2 * clamped);
 }
 
-const INTERPOLATABLE_KEYS: Array<keyof BlobbieConfig> = [
+type NumericBlobbieKey =
+  | 'round'
+  | 'bumps'
+  | 'point'
+  | 'pa'
+  | 'sx'
+  | 'sy'
+  | 'rot'
+  | 'es'
+  | 'tilt'
+  | 'sp'
+  | 'fx'
+  | 'fy';
+
+const INTERPOLATABLE_KEYS: NumericBlobbieKey[] = [
   'round',
   'bumps',
   'point',
@@ -191,7 +205,7 @@ export function interpolateBlobbie(
   const result: BlobbieConfig = { ...to };
 
   for (const key of INTERPOLATABLE_KEYS) {
-    result[key] = lerp(from[key] as number, to[key] as number, k);
+    result[key] = lerp(from[key], to[key], k);
   }
 
   // Interpolate color in RGB space

@@ -1,8 +1,10 @@
-import { ReactNode } from 'react';
+import { ReactNode, useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuthSession } from '../features/auth/hooks/useAuth';
 import { useProfileQuery } from '../features/profile/hooks/useProfile';
 import { Spinner } from '../shared/ui';
+import { migrateLegacyClientStorageIfNeeded } from '../storage/migration/clientStorageMigrator';
+import { hydrateThemeFromServer } from '../shared/ui/theme/tokens';
 
 export function RequireAuth({ children }: { readonly children: ReactNode }) {
   const { isLoading: isSessionLoading, isAuthenticated } = useAuthSession();
@@ -12,6 +14,13 @@ export function RequireAuth({ children }: { readonly children: ReactNode }) {
     isError: isProfileError,
   } = useProfileQuery(isAuthenticated);
   const location = useLocation();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      migrateLegacyClientStorageIfNeeded();
+      hydrateThemeFromServer();
+    }
+  }, [isAuthenticated]);
 
   if (
     isSessionLoading ||

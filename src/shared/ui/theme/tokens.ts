@@ -49,6 +49,27 @@ export function applyThemePreference(pref: ThemePreference): void {
   for (const listener of themeListeners) {
     listener(pref);
   }
+
+  // Asynchronously sync to backend settings if user is authenticated
+  if (typeof window !== 'undefined') {
+    import('../../../api/settings.api')
+      .then(({ settingsApi }) => settingsApi.updateSettings({ theme: pref }))
+      .catch(() => {
+        // Ignored if unauthenticated or network unavailable
+      });
+  }
+}
+
+export async function hydrateThemeFromServer(): Promise<void> {
+  try {
+    const { settingsApi } = await import('../../../api/settings.api');
+    const settings = await settingsApi.getSettings();
+    if (settings?.theme) {
+      applyThemePreference(settings.theme);
+    }
+  } catch {
+    // Retain default/local if unauthenticated or offline
+  }
 }
 
 export function getThemePreference(): ThemePreference {

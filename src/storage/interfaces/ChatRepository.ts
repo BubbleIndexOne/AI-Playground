@@ -30,7 +30,7 @@ export interface ChatSessionRecord {
 export interface ChatRepository {
   listByAgent(agentId: string): Promise<ChatSessionRecord[]>;
   get(chatId: string): Promise<ChatSessionRecord | null>;
-  create(agentId: string, title?: string): Promise<ChatSessionRecord>;
+  create(agentId: string, title?: string, id?: string): Promise<ChatSessionRecord>;
   rename(chatId: string, title: string): Promise<ChatSessionRecord>;
   saveMessages(
     chatId: string,

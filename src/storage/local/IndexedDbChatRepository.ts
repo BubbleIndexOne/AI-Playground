@@ -26,10 +26,10 @@ export class IndexedDbChatRepository implements ChatRepository {
     return item ?? null;
   }
 
-  async create(agentId: string, title?: string): Promise<ChatSessionRecord> {
+  async create(agentId: string, title?: string, id?: string): Promise<ChatSessionRecord> {
     const now = new Date().toISOString();
     const record: ChatSessionRecord = {
-      id: crypto.randomUUID(),
+      id: id ?? crypto.randomUUID(),
       agentId,
       title: title?.trim() || 'New Conversation',
       messages: [],

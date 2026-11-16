@@ -2,7 +2,7 @@ import {
   AgentRecord,
   SaveAgentInput,
 } from '../../../storage/interfaces/AgentRepository';
-import { agentRepository } from '../../../storage/local/IndexedDbAgentRepository';
+import { remoteAgentRepository as agentRepository } from '../../../storage/remote/RemoteAgentRepository';
 
 export const agentsService = {
   list(): Promise<AgentRecord[]> {
