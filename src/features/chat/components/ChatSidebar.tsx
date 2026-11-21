@@ -104,18 +104,20 @@ export function ChatSidebar({
 
   // Filter conversations in real time so users never have to scroll through dozens of chats
   const filteredChats = useMemo(() => {
-    if (!searchFilter.trim()) return chats;
+    if (!searchFilter.trim()) return chats ?? [];
     const query = searchFilter.toLowerCase().trim();
-    return chats.filter(
+    return (chats ?? []).filter(
       (c) =>
-        c.title.toLowerCase().includes(query) ||
-        c.messages.some((m) => m.content.toLowerCase().includes(query))
+        (c.title ?? '').toLowerCase().includes(query) ||
+        (c.messages ?? []).some((m) =>
+          (m.content ?? '').toLowerCase().includes(query)
+        )
     );
   }, [chats, searchFilter]);
 
   // Detect redundant empty conversations
   const emptyChats = useMemo(() => {
-    return (chats ?? []).filter((c) => c.messages.length === 0);
+    return (chats ?? []).filter((c) => (c.messages ?? []).length === 0);
   }, [chats]);
 
   return (

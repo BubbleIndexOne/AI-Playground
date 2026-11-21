@@ -69,7 +69,7 @@ export function ChatPage() {
   const [searchParams] = useSearchParams();
   const initialAgentParam = searchParams.get('agentId');
 
-  const { data: agents } = useAgentsQuery();
+  const { data: agents, isLoading: isAgentsLoading } = useAgentsQuery();
   const {
     data: credentials,
     isLoading: isCredentialsLoading,
@@ -211,6 +211,17 @@ export function ChatPage() {
 
   const isUsingDefaultPreset = !matchedAgentPreset;
 
+  const displayedMessages = useMemo(() => {
+    const serverMessages = activeChat?.messages ?? [];
+    const serverIds = new Set(serverMessages.map((m) => m.id));
+    const pending = optimisticMessages.filter((m) => !serverIds.has(m.id));
+    return [
+      ...serverMessages,
+      ...pending,
+      ...(streamingDraft ? [streamingDraft] : []),
+    ];
+  }, [activeChat?.messages, optimisticMessages, streamingDraft]);
+
   const presetProvider =
     activePreset && isModelProvider(activePreset.provider)
       ? (activePreset.provider as ModelProvider)
@@ -227,13 +238,13 @@ export function ChatPage() {
     if (!selectedAgentId) return;
 
     // 1. If currently in an empty chat, avoid creating a redundant empty chat
-    if (activeChat && activeChat.messages.length === 0) {
+    if (activeChat && (activeChat.messages ?? []).length === 0) {
       toast.info('Ready to chat', 'You are already in an empty conversation.');
       return;
     }
 
     // 2. If an empty conversation already exists for this agent, switch to it
-    const existingEmpty = (chats ?? []).find((c) => c.messages.length === 0);
+    const existingEmpty = (chats ?? []).find((c) => (c.messages ?? []).length === 0);
     if (existingEmpty) {
       setSelectedChatId(existingEmpty.id);
       toast.info('Empty chat ready', 'Switched to your existing empty conversation.');
@@ -270,7 +281,7 @@ export function ChatPage() {
       setSelectedChatId(chatSession.id);
     }
 
-    const nextHistory = [...chatSession.messages, userMessage];
+    const nextHistory = [...(chatSession.messages ?? []), userMessage];
 
     // Persist user prompt in background without blocking streaming startup
     saveMessagesMutation.mutateAsync({
@@ -433,29 +444,6 @@ export function ChatPage() {
     }
   };
 
-  if (!agents || agents.length === 0) {
-    return (
-      <EmptyState
-        icon={<Bot size={20} />}
-        title="No agents available"
-        description="Create an agent with a system prompt and model preset before starting a conversation."
-        actionLabel="Create agent"
-        onAction={() => navigate('/agents')}
-      />
-    );
-  }
-
-  const displayedMessages = useMemo(() => {
-    const serverMessages = activeChat?.messages ?? [];
-    const serverIds = new Set(serverMessages.map((m) => m.id));
-    const pending = optimisticMessages.filter((m) => !serverIds.has(m.id));
-    return [
-      ...serverMessages,
-      ...pending,
-      ...(streamingDraft ? [streamingDraft] : []),
-    ];
-  }, [activeChat?.messages, optimisticMessages, streamingDraft]);
-
   const renderRuntimeError = () => {
     if (runtimeError === null) return null;
 
@@ -510,10 +498,33 @@ export function ChatPage() {
     );
   };
 
+  if (isAgentsLoading) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-5rem)]">
+        <div className="flex flex-col items-center gap-3 text-muted">
+          <div className="w-8 h-8 rounded-full border-2 border-accent border-t-transparent animate-spin" />
+          <span className="text-[13px]">Loading agents...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!agents || agents.length === 0) {
+    return (
+      <EmptyState
+        icon={<Bot size={20} />}
+        title="No agents available"
+        description="Create an agent with a system prompt and model preset before starting a conversation."
+        actionLabel="Create agent"
+        onAction={() => navigate('/agents')}
+      />
+    );
+  }
+
   return (
     <div className="flex flex-col md:flex-row gap-5 h-[calc(100vh-5rem)] min-h-[540px]">
       <ChatSidebar
-        agents={agents}
+        agents={agents ?? []}
         selectedAgentId={selectedAgentId}
         onSelectAgent={(id) => {
           setSelectedAgentId(id || null);
