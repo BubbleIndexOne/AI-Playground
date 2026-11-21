@@ -43,6 +43,7 @@ export interface StreamTurnRequest {
   readonly tools: readonly ProviderToolDefinition[];
   readonly messages: readonly ProviderMessage[];
   readonly onTextDelta?: (delta: string) => void;
+  readonly abortSignal?: AbortSignal;
 }
 
 export interface StreamTurnResponse {
@@ -168,8 +169,16 @@ export async function executeProviderStreamTurn(
   provider: ModelProvider,
   request: StreamTurnRequest
 ): Promise<StreamTurnResponse> {
-  const { mode, modelId, systemPrompt, params, tools, messages, onTextDelta } =
-    request;
+  const {
+    mode,
+    modelId,
+    systemPrompt,
+    params,
+    tools,
+    messages,
+    onTextDelta,
+    abortSignal,
+  } = request;
 
   const sessionKey = mode === 'session' ? getSessionKey(provider) : undefined;
   const model = getLanguageModel({
@@ -188,6 +197,7 @@ export async function executeProviderStreamTurn(
   try {
     const result = streamText({
       model,
+      abortSignal,
       ...(systemPrompt.trim() ? { system: systemPrompt } : {}),
       messages: sdkMessages,
       ...(tools.length > 0 ? { tools: sdkTools } : {}),
@@ -221,6 +231,9 @@ export async function executeProviderStreamTurn(
     });
 
     for await (const part of result.fullStream) {
+      if (abortSignal?.aborted) {
+        break;
+      }
       if (part.type === 'text-delta') {
         fullText += part.text;
         onTextDelta?.(part.text);
@@ -235,10 +248,16 @@ export async function executeProviderStreamTurn(
           arguments: inputArgs,
         });
       } else if (part.type === 'error') {
+        if (abortSignal?.aborted) {
+          break;
+        }
         throw mapProviderError(part.error, provider, mode, sessionKey);
       }
     }
   } catch (err) {
+    if (abortSignal?.aborted || (err instanceof Error && err.name === 'AbortError')) {
+      return { text: fullText, toolCalls };
+    }
     throw mapProviderError(err, provider, mode, sessionKey);
   }
 

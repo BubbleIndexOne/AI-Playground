@@ -10,7 +10,7 @@ import {
   Square,
   Wrench,
 } from 'lucide-react';
-import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from 'react';
+import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ModelPreset } from '../../../api/types/modelPresets.types';
 import {
@@ -97,8 +97,10 @@ export function ChatPage() {
   const [isComposerFocused, setIsComposerFocused] = useState(false);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
   const [, setSessionKeyTick] = useState(0);
+  const [optimisticMessages, setOptimisticMessages] = useState<ChatMessageRecord[]>([]);
 
   const stopRequestedRef = useRef(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const messageContainerRef = useRef<HTMLDivElement>(null);
 
   const handleMessageScroll = () => {
@@ -151,6 +153,10 @@ export function ChatPage() {
       setSelectedChatId(null);
     }
   }, [chats, selectedChatId]);
+
+  useEffect(() => {
+    setOptimisticMessages([]);
+  }, [selectedChatId]);
 
   const activeChat = chats?.find((c) => c.id === selectedChatId) ?? null;
 
@@ -225,11 +231,12 @@ export function ChatPage() {
   const executeRun = async (
     provider: ModelProvider,
     mode: CredentialExecutionMode,
-    userPromptText: string
+    userMessage: ChatMessageRecord
   ) => {
     if (!selectedAgent) return;
     setRuntimeError(null);
     stopRequestedRef.current = false;
+    abortControllerRef.current = new AbortController();
 
     const modelId =
       activePreset?.model_id ??
@@ -242,23 +249,19 @@ export function ChatPage() {
     let chatSession = activeChat;
     if (!chatSession) {
       chatSession = await createChatMutation.mutateAsync(
-        userPromptText.slice(0, 42)
+        userMessage.content.slice(0, 42)
       );
       setSelectedChatId(chatSession.id);
     }
 
-    const userMessage: ChatMessageRecord = {
-      id: crypto.randomUUID(),
-      role: 'user',
-      content: userPromptText,
-      createdAt: new Date().toISOString(),
-    };
-
     const nextHistory = [...chatSession.messages, userMessage];
-    setPromptInput('');
-    await saveMessagesMutation.mutateAsync({
+
+    // Persist user prompt in background without blocking streaming startup
+    saveMessagesMutation.mutateAsync({
       chatId: chatSession.id,
       messages: nextHistory,
+    }).catch(() => {
+      // Handled by query mutation error state
     });
 
     setIsStreaming(true);
@@ -275,6 +278,7 @@ export function ChatPage() {
         resolvedTools: resolvedTools ?? [],
         history: nextHistory,
         maxIterations,
+        abortSignal: abortControllerRef.current.signal,
         onPartialUpdate: (draft) => {
           if (!stopRequestedRef.current) {
             setStreamingDraft(draft);
@@ -282,11 +286,27 @@ export function ChatPage() {
         },
       });
 
-      await saveMessagesMutation.mutateAsync({
-        chatId: chatSession.id,
-        messages: [...nextHistory, assistantMessage],
-      });
+      if (!stopRequestedRef.current) {
+        await saveMessagesMutation.mutateAsync({
+          chatId: chatSession.id,
+          messages: [...nextHistory, assistantMessage],
+        });
+      } else if (assistantMessage.content.trim() || assistantMessage.toolCalls?.length) {
+        // Save partial response up to the stop point
+        await saveMessagesMutation.mutateAsync({
+          chatId: chatSession.id,
+          messages: [...nextHistory, assistantMessage],
+        });
+      }
     } catch (err) {
+      if (
+        abortControllerRef.current?.signal.aborted ||
+        (err instanceof Error && err.name === 'AbortError') ||
+        stopRequestedRef.current
+      ) {
+        // Stop requested, clean exit without error banner
+        return;
+      }
       if (err instanceof ProxyRuntimeError && err.code === 'UNAUTHORIZED') {
         navigate('/auth/login', { replace: true });
         return;
@@ -307,12 +327,13 @@ export function ChatPage() {
     } finally {
       setIsStreaming(false);
       setStreamingDraft(null);
+      abortControllerRef.current = null;
     }
   };
 
   /**
    * Submits the user prompt after verifying agent configuration, preset resolution,
-   * and credential readiness. Prevents premature key prompts while credentials load.
+   * and credential readiness. Renders prompt immediately in UI optimistically.
    */
   const submitMessage = async () => {
     const trimmed = promptInput.trim();
@@ -369,8 +390,19 @@ export function ChatPage() {
       return;
     }
 
+    // Optimistically render user message immediately
+    const userMessage: ChatMessageRecord = {
+      id: crypto.randomUUID(),
+      role: 'user',
+      content: trimmed,
+      createdAt: new Date().toISOString(),
+    };
+    setOptimisticMessages((prev) => [...prev, userMessage]);
+    setPromptInput('');
+    setTimeout(() => scrollToBottom(), 10);
+
     setPendingKeyProvider(null);
-    await executeRun(modeSelection.provider, modeSelection.mode, trimmed);
+    await executeRun(modeSelection.provider, modeSelection.mode, userMessage);
   };
 
   const handleFormSubmit = (e: FormEvent) => {
@@ -397,10 +429,16 @@ export function ChatPage() {
     );
   }
 
-  const displayedMessages = [
-    ...(activeChat?.messages ?? []),
-    ...(streamingDraft ? [streamingDraft] : []),
-  ];
+  const displayedMessages = useMemo(() => {
+    const serverMessages = activeChat?.messages ?? [];
+    const serverIds = new Set(serverMessages.map((m) => m.id));
+    const pending = optimisticMessages.filter((m) => !serverIds.has(m.id));
+    return [
+      ...serverMessages,
+      ...pending,
+      ...(streamingDraft ? [streamingDraft] : []),
+    ];
+  }, [activeChat?.messages, optimisticMessages, streamingDraft]);
 
   const renderRuntimeError = () => {
     if (runtimeError === null) return null;
@@ -630,7 +668,16 @@ export function ChatPage() {
                 setPendingKeyProvider(null);
                 const trimmed = promptInput.trim();
                 if (trimmed) {
-                  await executeRun(targetProvider, resolvedMode, trimmed);
+                  const userMessage: ChatMessageRecord = {
+                    id: crypto.randomUUID(),
+                    role: 'user',
+                    content: trimmed,
+                    createdAt: new Date().toISOString(),
+                  };
+                  setOptimisticMessages((prev) => [...prev, userMessage]);
+                  setPromptInput('');
+                  setTimeout(() => scrollToBottom(), 10);
+                  await executeRun(targetProvider, resolvedMode, userMessage);
                 }
               }}
               onCancel={() => setPendingKeyProvider(null)}
@@ -659,6 +706,9 @@ export function ChatPage() {
                   icon={<Square size={13} />}
                   onClick={() => {
                     stopRequestedRef.current = true;
+                    if (abortControllerRef.current) {
+                      abortControllerRef.current.abort();
+                    }
                     setIsStreaming(false);
                   }}
                 >

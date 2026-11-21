@@ -42,7 +42,10 @@ import {
   toast,
   Tooltip,
 } from '../../../shared/ui';
+import { ModelProvider } from '../../../domain/providers';
 import { useAgentMutations, useAgentsQuery } from '../../agents/hooks/useAgents';
+import { useModelCredentials } from '../../credentials/hooks/useModelCredentials';
+import { useModelPresetsQuery } from '../../presets/hooks/useModelPresets';
 import { MarketplaceToolDetailModal } from '../components/MarketplaceToolDetailModal';
 import {
   useMarketplaceMutations,
@@ -67,6 +70,7 @@ interface CommunityAgentTemplate {
   readonly systemPrompt: string;
   readonly category: string;
   readonly tags: readonly string[];
+  readonly toolSlugs: readonly string[];
   readonly addCount: number;
 }
 
@@ -88,6 +92,7 @@ const COMMUNITY_AGENTS: ReadonlyArray<CommunityAgentTemplate> = [
       'You are Dr. Evelyn Reed, a Senior Research Scientist and Mathematical Verification Specialist. Provide rigorous analytical explanations, compute exact answers step-by-step, format mathematical formulas cleanly in KaTeX LaTeX ($...$ and $$...$$), and synthesize structured findings.',
     category: 'Research & Math',
     tags: ['Quantitative', 'LaTeX Math', 'Research'],
+    toolSlugs: ['community_calculator', 'math_calculator'],
     addCount: 1420,
   },
   {
@@ -107,6 +112,7 @@ const COMMUNITY_AGENTS: ReadonlyArray<CommunityAgentTemplate> = [
       'You are Atlas, a Senior Software Architect. Guide technical designs, evaluate edge cases, suggest robust design patterns, and ensure strict type safety, modular decoupling, and high performance.',
     category: 'Engineering',
     tags: ['Architecture', 'TypeScript', 'Review'],
+    toolSlugs: ['json_validator', 'text_analyzer'],
     addCount: 1180,
   },
   {
@@ -126,6 +132,7 @@ const COMMUNITY_AGENTS: ReadonlyArray<CommunityAgentTemplate> = [
       'You are Clara, a Creative Narrative Director. Help write compelling copy, clear documentation, engaging dialogue, and vivid prose with empathetic and lively tone.',
     category: 'Writing',
     tags: ['Creative', 'Narrative', 'Documentation'],
+    toolSlugs: ['text_analyzer'],
     addCount: 930,
   },
   {
@@ -145,6 +152,7 @@ const COMMUNITY_AGENTS: ReadonlyArray<CommunityAgentTemplate> = [
       'You are DataPulse, an Applied Data Scientist. Formulate analytical hypotheses, compute descriptive and inferential statistics, interpret datasets, and deliver clear metrics.',
     category: 'Data',
     tags: ['Data Science', 'Statistics', 'Metrics'],
+    toolSlugs: ['community_calculator', 'unit_converter'],
     addCount: 875,
   },
   {
@@ -164,6 +172,7 @@ const COMMUNITY_AGENTS: ReadonlyArray<CommunityAgentTemplate> = [
       'You are Kira, a patient and knowledgeable Customer Experience and Troubleshooting Specialist. Walk users through diagnostic steps calmly and systematically.',
     category: 'Operations',
     tags: ['Support', 'Troubleshooting', 'Triage'],
+    toolSlugs: ['datetime_helper', 'text_analyzer'],
     addCount: 760,
   },
   {
@@ -183,6 +192,7 @@ const COMMUNITY_AGENTS: ReadonlyArray<CommunityAgentTemplate> = [
       'You are Sentinel, a strict QA and Security Specialist. Identify boundary edge cases, simulate failure modes, verify validation schemas, and ensure rock-solid resilience.',
     category: 'Engineering',
     tags: ['QA', 'Security', 'Edge Cases'],
+    toolSlugs: ['json_validator', 'text_analyzer'],
     addCount: 690,
   },
 ];
@@ -227,6 +237,8 @@ export function MarketplacePage() {
   });
 
   const { data: userAgents } = useAgentsQuery();
+  const { data: presets } = useModelPresetsQuery();
+  const { data: credentials } = useModelCredentials();
   const { saveAgentMutation } = useAgentMutations();
   const { installMutation, uninstallMutation, forkMutation } =
     useMarketplaceMutations();
@@ -302,18 +314,53 @@ export function MarketplacePage() {
     e.stopPropagation();
     setAddingAgentId(template.id);
     try {
+      const savedProviders = new Set((credentials ?? []).map((c) => c.provider));
+      const defaultPreset =
+        presets?.find((p) => savedProviders.has(p.provider as ModelProvider)) ??
+        presets?.[0];
+      const modelPresetId = defaultPreset?.id ?? '';
+
+      // Auto-install uninstalled required tools and attach to agent
+      const attachedTools: Array<{ toolId: string; pinnedVersion: number | null }> = [];
+      let newlyInstalledCount = 0;
+
+      for (const slug of template.toolSlugs) {
+        const matchedTool = tools.find(
+          (t) =>
+            t.name.toLowerCase() === slug.toLowerCase() ||
+            t.id.toLowerCase() === slug.toLowerCase()
+        );
+        if (matchedTool) {
+          if (!matchedTool.is_installed) {
+            try {
+              await installMutation.mutateAsync({ id: matchedTool.id });
+              newlyInstalledCount++;
+            } catch {
+              // Ignore if already installed or handled concurrently
+            }
+          }
+          attachedTools.push({
+            toolId: matchedTool.id,
+            pinnedVersion: 1,
+          });
+        }
+      }
+
       const created = await saveAgentMutation.mutateAsync({
         name: template.name,
         description: template.description,
         systemPrompt: template.systemPrompt,
         avatar: template.avatar,
-        modelPresetId: '',
-        attachedTools: [],
+        modelPresetId,
+        attachedTools,
         attachedConnectors: [],
       });
+
       toast.success(
         'Agent added',
-        `Added "${template.name}" to your workspace.`
+        newlyInstalledCount > 0
+          ? `Added "${template.name}" and installed ${newlyInstalledCount} bundled tool(s).`
+          : `Added "${template.name}" with ${attachedTools.length} tool(s) attached.`
       );
       if (created?.id) {
         navigate(`/chat?agentId=${created.id}`);
@@ -677,6 +724,13 @@ export function MarketplacePage() {
                       </p>
 
                       <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                        {template.toolSlugs.length > 0 && (
+                          <Badge variant="neutral" mono className="text-[10px] gap-1">
+                            <Wrench size={9} />
+                            {template.toolSlugs.length}{' '}
+                            {template.toolSlugs.length === 1 ? 'tool' : 'tools'}
+                          </Badge>
+                        )}
                         {template.tags.map((tag) => (
                           <Badge key={tag} variant="info" mono className="text-[10px]">
                             {tag}
@@ -844,6 +898,25 @@ export function MarketplacePage() {
                 ))}
               </div>
             </div>
+
+            {previewAgent.toolSlugs.length > 0 && (
+              <div className="space-y-1.5">
+                <label className="text-[12px] font-medium text-secondary">
+                  Bundled Tools ({previewAgent.toolSlugs.length})
+                </label>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {previewAgent.toolSlugs.map((slug) => (
+                    <Badge key={slug} variant="neutral" mono className="gap-1">
+                      <Wrench size={10} />
+                      {slug}
+                    </Badge>
+                  ))}
+                </div>
+                <p className="text-[11px] text-muted">
+                  These tools will automatically be added to your pool and attached to this agent.
+                </p>
+              </div>
+            )}
           </div>
         </Dialog>
       )}

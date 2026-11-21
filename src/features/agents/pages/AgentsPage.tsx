@@ -17,6 +17,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   getProviderDisplayName,
   isModelProvider,
+  ModelProvider,
 } from '../../../domain/providers';
 import { ErrorBanner } from '../../../shared/components/ErrorBanner';
 import {
@@ -192,13 +193,28 @@ export function AgentsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {agents!.map((agent) => {
-            const preset = presetById.get(agent.modelPresetId);
-            const presetName = preset?.name ?? 'Default (auto)';
-            const provider = preset?.provider;
-            const hasSavedKey =
-              Boolean(provider) &&
-              isModelProvider(provider) &&
-              savedProviders.has(provider);
+            const isExplicitPreset = Boolean(
+              agent.modelPresetId && presetById.has(agent.modelPresetId)
+            );
+            const defaultPreset =
+              presets?.find((p) =>
+                savedProviders.has(p.provider as ModelProvider)
+              ) ?? presets?.[0];
+            const effectivePreset = isExplicitPreset
+              ? presetById.get(agent.modelPresetId)
+              : defaultPreset;
+            const presetName = isExplicitPreset
+              ? (effectivePreset?.name ?? 'Default (auto)')
+              : `Default (${effectivePreset?.name ?? 'auto'})`;
+            const provider = effectivePreset?.provider;
+
+            const hasSavedKey = isExplicitPreset
+              ? Boolean(
+                  provider &&
+                  isModelProvider(provider) &&
+                  savedProviders.has(provider)
+                )
+              : savedProviders.size > 0;
 
             const isDetailsOpen = expandedDetails.has(agent.id);
 

@@ -85,6 +85,7 @@ export interface RunAgentLoopInput {
   readonly history: readonly ChatMessageRecord[];
   readonly maxIterations?: number;
   readonly onPartialUpdate?: (assistantDraft: ChatMessageRecord) => void;
+  readonly abortSignal?: AbortSignal;
 }
 
 export async function runAgentLoop(
@@ -100,6 +101,7 @@ export async function runAgentLoop(
     history,
     maxIterations = 5,
     onPartialUpdate,
+    abortSignal,
   } = input;
 
   const adapter = providers[provider];
@@ -138,6 +140,9 @@ export async function runAgentLoop(
   };
 
   for (let iteration = 0; iteration < maxIterations; iteration++) {
+    if (abortSignal?.aborted) {
+      break;
+    }
     let stepText = '';
     let turnResult;
     try {
@@ -148,13 +153,18 @@ export async function runAgentLoop(
         params: presetParams,
         tools: toolDefinitions,
         messages: providerMessages,
+        abortSignal,
         onTextDelta: (delta) => {
+          if (abortSignal?.aborted) return;
           stepText += delta;
           accumulatedText += delta;
           emitDraft();
         },
       });
     } catch (err) {
+      if (abortSignal?.aborted) {
+        break;
+      }
       if (err instanceof ProxyRuntimeError) {
         throw err;
       }
@@ -167,7 +177,7 @@ export async function runAgentLoop(
       break;
     }
 
-    if (turnResult.toolCalls.length === 0) {
+    if (abortSignal?.aborted || !turnResult || turnResult.toolCalls.length === 0) {
       break;
     }
 
@@ -178,6 +188,9 @@ export async function runAgentLoop(
     });
 
     for (const tc of turnResult.toolCalls) {
+      if (abortSignal?.aborted) {
+        break;
+      }
       const resolvedTool = toolMap.get(tc.name);
       const recordId = tc.id || crypto.randomUUID();
 
