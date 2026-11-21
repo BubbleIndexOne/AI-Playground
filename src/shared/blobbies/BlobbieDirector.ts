@@ -289,6 +289,8 @@ class BlobbieDirector {
     const breath = 1 + 0.02 * Math.sin(t * 1.7 + inst.phase);
 
     ctx.clearRect(0, 0, width, width);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     ctx.save();
 
     // Center translation with subtle gaze lean and breathing wobble
@@ -330,14 +332,28 @@ class BlobbieDirector {
     // Draw Eyes with gaze direction and eyelid contraction during blink
     const eyeVerticalScale = Math.max(0.08, 1 - 0.92 * inst.blinkVal) * (1 + 0.25 * inst.pop);
 
+    // Optical sizing: prevent eyes from shrinking into unreadable hairlines at small sizes
+    const cssWidth = parseFloat(inst.canvas.style.width) || width;
+    const renderRatio = width / (cssWidth || 1);
+    const cssRadius = cssWidth * 0.4;
+    const opticalBoost = cssRadius < 28 ? Math.min(1.4, 1 + (28 - cssRadius) / 36) : 1;
+
     for (let i = 0; i < 2; i++) {
       const side = i ? 1 : -1;
       const perspectiveShrink = 1 - 0.14 * gx * side;
       const eyeX =
         (p.fx + gx * 0.16 + (side * p.sp) / 2 * (1 - 0.25 * Math.abs(gx))) * radius;
       const eyeY = (p.fy + gy * 0.12) * radius;
-      const eyeWidth = 0.15 * p.es * perspectiveShrink * radius;
-      const eyeHeight = 0.42 * p.es * perspectiveShrink * radius;
+      let eyeWidth = 0.15 * p.es * perspectiveShrink * radius * opticalBoost;
+      let eyeHeight = 0.42 * p.es * perspectiveShrink * radius * opticalBoost;
+
+      // Ensure eyes never drop below 2.5 CSS pixels in physical width
+      const minEyeWidth = 2.5 * renderRatio;
+      if (eyeWidth < minEyeWidth) {
+        const factor = minEyeWidth / eyeWidth;
+        eyeWidth = minEyeWidth;
+        eyeHeight *= Math.min(1.2, factor);
+      }
 
       ctx.save();
       ctx.translate(eyeX, eyeY);

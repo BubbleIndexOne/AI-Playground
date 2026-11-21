@@ -9,8 +9,6 @@ import {
   ArrowUpCircle,
   CheckCircle,
   Copy,
-  Download,
-  GitFork,
   Plug,
   Plus,
   ShieldAlert,
@@ -87,11 +85,11 @@ export function MarketplaceToolDetailModal({
         input: versionId ? { version_id: versionId } : undefined,
       });
       toast.success(
-        'Tool installed',
+        'Tool added',
         `Pinned ${tool.name} to your active tool pool.`
       );
     } catch (err) {
-      toast.error('Failed to install tool', err instanceof Error ? err.message : String(err));
+      toast.error('Failed to add tool', err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -99,30 +97,30 @@ export function MarketplaceToolDetailModal({
     if (!tool) return;
     try {
       await uninstallMutation.mutateAsync(tool.id);
-      toast.info('Tool uninstalled', `Removed ${tool.name} from your pool.`);
+      toast.info('Tool removed', `Removed ${tool.name} from your pool.`);
     } catch (err) {
-      toast.error('Failed to uninstall tool', err instanceof Error ? err.message : String(err));
+      toast.error('Failed to remove tool', err instanceof Error ? err.message : String(err));
     }
   };
 
   const handleFork = async () => {
     if (!tool) return;
     if (!canFork) {
-      toast.info('Forking prohibited', 'Protected MCP server tools cannot be forked.');
+      toast.info('Copying prohibited', 'Protected MCP server tools cannot be copied.');
       return;
     }
 
     try {
       const response = await forkMutation.mutateAsync(tool.id);
-      toast.success('Tool forked', `Created "${response.tool.name}" in your workspace.`);
+      toast.success('Tool copied', `Created "${response.tool.name}" in your workspace.`);
       onClose();
       navigate(`/tools/${response.tool.id}`);
     } catch (err) {
       if (err instanceof ApiError && err.status === 403) {
-        toast.error('Forking forbidden', 'Protected server tools cannot be forked to client workspace.');
+        toast.error('Copying forbidden', 'Protected server tools cannot be copied to client workspace.');
         return;
       }
-      toast.error('Fork failed', err instanceof Error ? err.message : String(err));
+      toast.error('Copy failed', err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -175,7 +173,7 @@ export function MarketplaceToolDetailModal({
                 {tool.is_installed && (
                   <Badge variant="success" className="gap-1">
                     <CheckCircle size={12} />
-                    Installed{tool.pinned_version_number ? ` (v${tool.pinned_version_number})` : ''}
+                    Added{tool.pinned_version_number ? ` (v${tool.pinned_version_number})` : ''}
                   </Badge>
                 )}
 
@@ -233,7 +231,7 @@ export function MarketplaceToolDetailModal({
                     loading={uninstallMutation.isPending}
                     onClick={handleUninstall}
                   >
-                    Uninstall
+                    Remove
                   </Button>
                 </>
               ) : (
@@ -242,11 +240,11 @@ export function MarketplaceToolDetailModal({
                     type="button"
                     variant="primary"
                     size="sm"
-                    icon={<Download size={14} />}
+                    icon={<Plus size={14} />}
                     loading={installMutation.isPending}
                     onClick={() => handleInstall(selectedInstallVersionId || undefined)}
                   >
-                    Install to account
+                    Add tool
                   </Button>
                   {allVersions.length > 1 && (
                     <Select
@@ -269,7 +267,7 @@ export function MarketplaceToolDetailModal({
                 content={
                   canFork
                     ? 'Create an editable copy of this client tool in your personal workspace'
-                    : 'Protected MCP server tools cannot be forked to client workspaces.'
+                    : 'Protected MCP server tools cannot be copied to client workspaces.'
                 }
               >
                 <span>
@@ -277,12 +275,12 @@ export function MarketplaceToolDetailModal({
                     type="button"
                     variant="secondary"
                     size="sm"
-                    icon={<GitFork size={14} />}
+                    icon={<Copy size={14} />}
                     disabled={!canFork}
                     loading={forkMutation.isPending}
                     onClick={handleFork}
                   >
-                    Fork tool
+                    Make a copy
                   </Button>
                 </span>
               </Tooltip>

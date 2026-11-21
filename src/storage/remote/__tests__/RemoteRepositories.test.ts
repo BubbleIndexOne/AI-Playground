@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ConnectorType } from '../../../domain/enums';
 
 // Mock agentsApi
 const agentsApiMocks = vi.hoisted(() => ({
@@ -146,7 +147,7 @@ describe('RemoteAgentRepository', () => {
       systemPrompt: 'Analyze formulas rigorously.',
       modelPresetId: 'preset-uuid-1',
       attachedTools: [{ toolId: 'tool-uuid-1', pinnedVersion: 1 }],
-      attachedConnectors: ['postgres'],
+      attachedConnectors: [ConnectorType.Postgres],
       avatar: mockBlobbie,
     });
 

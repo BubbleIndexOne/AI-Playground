@@ -1,10 +1,12 @@
 import {
   AlertTriangle,
   Bot,
+  ChevronDown,
+  ChevronUp,
   Copy,
   Download,
   Edit3,
-  MessageSquare,
+  Info,
   MoreHorizontal,
   Plus,
   Trash2,
@@ -53,9 +55,22 @@ export function AgentsPage() {
   const [deleteTarget, setDeleteTarget] = useState<AgentRecord | null>(null);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [importJsonText, setImportJsonText] = useState('');
+  const [expandedDetails, setExpandedDetails] = useState<Set<string>>(new Set());
 
   const presetById = new Map((presets ?? []).map((p) => [p.id, p]));
   const savedProviders = new Set((credentials ?? []).map((c) => c.provider));
+
+  const toggleDetails = (agentId: string) => {
+    setExpandedDetails((prev) => {
+      const next = new Set(prev);
+      if (next.has(agentId)) {
+        next.delete(agentId);
+      } else {
+        next.add(agentId);
+      }
+      return next;
+    });
+  };
 
   const downloadJson = (json: string, filename: string) => {
     const blob = new Blob([json], { type: 'application/json' });
@@ -185,12 +200,15 @@ export function AgentsPage() {
               isModelProvider(provider) &&
               savedProviders.has(provider);
 
+            const isDetailsOpen = expandedDetails.has(agent.id);
+
             return (
               <Card
                 key={agent.id}
                 interactive
                 padding="md"
-                className="flex flex-col justify-between gap-4"
+                onClick={() => navigate(`/chat?agentId=${agent.id}`)}
+                className="flex flex-col justify-between gap-4 cursor-pointer hover:border-accent/40 transition-all group"
               >
                 <div className="space-y-3">
                   <div className="flex items-start justify-between gap-3">
@@ -201,7 +219,7 @@ export function AgentsPage() {
                         title={agent.name}
                       />
                       <div className="min-w-0">
-                        <h2 className="text-[16px] font-semibold text-primary truncate">
+                        <h2 className="text-[16px] font-semibold text-primary truncate group-hover:text-accent transition-colors">
                           {agent.name}
                         </h2>
                         <span className="text-[12px] text-secondary">
@@ -209,17 +227,17 @@ export function AgentsPage() {
                         </span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        icon={<MessageSquare size={14} />}
-                        onClick={() => navigate(`/chat?agentId=${agent.id}`)}
-                      >
-                        Chat
-                      </Button>
+                    <div
+                      className="flex items-center gap-1.5 shrink-0"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <DropdownMenu
                         items={[
+                          {
+                            label: isDetailsOpen ? 'Hide details' : 'View details',
+                            icon: <Info size={14} />,
+                            onClick: () => toggleDetails(agent.id),
+                          },
                           {
                             label: 'Edit',
                             icon: <Edit3 size={14} />,
@@ -261,26 +279,52 @@ export function AgentsPage() {
                   </p>
                 </div>
 
-                <div className="pt-3 border-t border-subtle flex flex-wrap items-center gap-2">
-                  <Badge variant="neutral">{presetName}</Badge>
-                  {!hasSavedKey && (
-                    <Badge variant="warning">
-                      <AlertTriangle size={11} className="mr-1" />
-                      {provider
-                        ? `${getProviderDisplayName(provider)}: no key saved`
-                        : 'No key saved'}
-                    </Badge>
+                {/* Opt-in Extra Details */}
+                <div
+                  className="pt-2 border-t border-subtle flex flex-col gap-2"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={() => toggleDetails(agent.id)}
+                      className="inline-flex items-center gap-1 text-[12px] text-secondary hover:text-primary transition-colors py-0.5 px-1.5 rounded hover:bg-hover"
+                      aria-expanded={isDetailsOpen}
+                    >
+                      {isDetailsOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                      <span>{isDetailsOpen ? 'Hide details' : 'Details'}</span>
+                    </button>
+                    {!hasSavedKey && (
+                      <Badge variant="warning" className="text-[11px] py-0 px-1.5">
+                        <AlertTriangle size={10} className="mr-1" />
+                        No key saved
+                      </Badge>
+                    )}
+                  </div>
+
+                  {isDetailsOpen && (
+                    <div className="pt-1 flex flex-wrap items-center gap-2 animate-in fade-in duration-150">
+                      <Badge variant="neutral">{presetName}</Badge>
+                      {!hasSavedKey && (
+                        <Badge variant="warning">
+                          <AlertTriangle size={11} className="mr-1" />
+                          {provider
+                            ? `${getProviderDisplayName(provider)}: no key saved`
+                            : 'No key saved'}
+                        </Badge>
+                      )}
+                      <Badge variant="neutral" mono>
+                        {agent.attachedTools.length}{' '}
+                        {agent.attachedTools.length === 1 ? 'tool' : 'tools'}
+                      </Badge>
+                      <Badge variant="neutral" mono>
+                        {agent.attachedConnectors.length}{' '}
+                        {agent.attachedConnectors.length === 1
+                          ? 'connector'
+                          : 'connectors'}
+                      </Badge>
+                    </div>
                   )}
-                  <Badge variant="neutral" mono>
-                    {agent.attachedTools.length}{' '}
-                    {agent.attachedTools.length === 1 ? 'tool' : 'tools'}
-                  </Badge>
-                  <Badge variant="neutral" mono>
-                    {agent.attachedConnectors.length}{' '}
-                    {agent.attachedConnectors.length === 1
-                      ? 'connector'
-                      : 'connectors'}
-                  </Badge>
                 </div>
               </Card>
             );

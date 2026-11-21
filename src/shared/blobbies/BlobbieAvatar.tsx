@@ -63,8 +63,11 @@ export function BlobbieAvatar({
     if (!canvas) return;
 
     const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
-    canvas.width = pixelSize * dpr;
-    canvas.height = pixelSize * dpr;
+    // Supersample small canvases with at least 3x backing store resolution (or 2x for large)
+    // so downsampling produces razor-sharp vector contours and crisp facial features
+    const renderScale = Math.max(dpr, pixelSize < 60 ? 3 : 2);
+    canvas.width = Math.round(pixelSize * renderScale);
+    canvas.height = Math.round(pixelSize * renderScale);
     canvas.style.width = `${pixelSize}px`;
     canvas.style.height = `${pixelSize}px`;
 
@@ -113,6 +116,8 @@ export function BlobbieAvatar({
       style={{
         width: `${pixelSize}px`,
         height: `${pixelSize}px`,
+        transform: 'translateZ(0)',
+        backfaceVisibility: 'hidden',
       }}
     />
   );
