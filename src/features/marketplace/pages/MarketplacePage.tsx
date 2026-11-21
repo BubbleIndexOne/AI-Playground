@@ -334,9 +334,11 @@ export function MarketplacePage() {
           if (!matchedTool.is_installed) {
             try {
               await installMutation.mutateAsync({ id: matchedTool.id });
+              matchedTool.is_installed = true;
               newlyInstalledCount++;
             } catch {
               // Ignore if already installed or handled concurrently
+              matchedTool.is_installed = true;
             }
           }
           attachedTools.push({

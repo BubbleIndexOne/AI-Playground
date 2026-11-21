@@ -142,7 +142,6 @@ export function ChatPage() {
     renameChatMutation,
     saveMessagesMutation,
     deleteChatMutation,
-    pruneEmptyChatsMutation,
   } = useChatMutations(selectedAgentId);
 
   useEffect(() => {
@@ -541,17 +540,6 @@ export function ChatPage() {
           toast.success('Conversation renamed');
         }}
         onRequestDeleteChat={setDeleteTarget}
-        onPruneEmptyChats={async (emptyIds) => {
-          try {
-            await pruneEmptyChatsMutation.mutateAsync(emptyIds);
-            toast.success(`Cleaned up ${emptyIds.length} empty conversation(s)`);
-          } catch (err) {
-            toast.error(
-              'Failed to clean up empty chats',
-              err instanceof Error ? err.message : String(err)
-            );
-          }
-        }}
       />
 
       {/* Right Conversation Pane */}

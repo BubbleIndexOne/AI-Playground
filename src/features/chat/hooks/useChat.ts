@@ -76,25 +76,10 @@ export function useChatMutations(agentId: string | null) {
     },
   });
 
-  const pruneEmptyChatsMutation = useMutation({
-    mutationFn: async (chatIds: readonly string[]) => {
-      await Promise.all(chatIds.map((id) => chatService.deleteChat(id)));
-      return chatIds;
-    },
-    onSuccess: (prunedChatIds) => {
-      const prunedSet = new Set(prunedChatIds);
-      queryClient.setQueryData<ChatSessionRecord[]>(
-        ['local-chats', agentId],
-        (old) => (old ?? []).filter((c) => !prunedSet.has(c.id))
-      );
-    },
-  });
-
   return {
     createChatMutation,
     renameChatMutation,
     saveMessagesMutation,
     deleteChatMutation,
-    pruneEmptyChatsMutation,
   };
 }

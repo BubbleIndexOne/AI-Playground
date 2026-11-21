@@ -29,7 +29,6 @@ interface ChatSidebarProps {
   readonly onCreateChat: () => void;
   readonly onRenameChat: (chatId: string, title: string) => void;
   readonly onRequestDeleteChat: (chat: ChatSessionRecord) => void;
-  readonly onPruneEmptyChats?: (emptyIds: string[]) => void;
 }
 
 /**
@@ -93,7 +92,6 @@ export function ChatSidebar({
   onCreateChat,
   onRenameChat,
   onRequestDeleteChat,
-  onPruneEmptyChats,
 }: ChatSidebarProps) {
   const navigate = useNavigate();
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -114,11 +112,6 @@ export function ChatSidebar({
         )
     );
   }, [chats, searchFilter]);
-
-  // Detect redundant empty conversations
-  const emptyChats = useMemo(() => {
-    return (chats ?? []).filter((c) => (c.messages ?? []).length === 0);
-  }, [chats]);
 
   return (
     <div className="w-full md:w-80 shrink-0 rounded-xl border border-subtle bg-card shadow-card flex flex-row h-full min-h-[540px] overflow-hidden">
@@ -228,22 +221,6 @@ export function ChatSidebar({
             )}
           </div>
         </div>
-
-        {/* Clean up redundant empty chats notice */}
-        {emptyChats.length > 1 && onPruneEmptyChats && (
-          <div className="mx-2.5 mt-2 p-1.5 rounded-lg bg-warning-tint/50 border border-warning-border/50 flex items-center justify-between text-[11px] text-warning">
-            <span>{emptyChats.length} empty chats</span>
-            <button
-              type="button"
-              onClick={() =>
-                onPruneEmptyChats(emptyChats.slice(1).map((c) => c.id))
-              }
-              className="underline font-semibold hover:text-primary cursor-pointer"
-            >
-              Clean up
-            </button>
-          </div>
-        )}
 
         {/* Conversations List */}
         <div className="flex-1 overflow-y-auto no-scrollbar p-2 space-y-1">
