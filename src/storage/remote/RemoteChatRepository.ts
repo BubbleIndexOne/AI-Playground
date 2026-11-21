@@ -46,6 +46,11 @@ function mapChatDetailToRecord(detail: ChatSessionDetail): ChatSessionRecord {
 }
 
 export class RemoteChatRepository implements ChatRepository {
+  private sessionCache = new Map<
+    string,
+    { updatedAt: string; session: ChatSessionRecord }
+  >();
+
   async listByAgent(agentId: string): Promise<ChatSessionRecord[]> {
     const summaries = await chatsApi.list(agentId);
     if (!summaries || summaries.length === 0) {
@@ -54,9 +59,19 @@ export class RemoteChatRepository implements ChatRepository {
 
     const fullSessions = await Promise.all(
       summaries.map(async (s) => {
+        const cached = this.sessionCache.get(s.id);
+        if (cached && cached.updatedAt === s.updated_at) {
+          return cached.session;
+        }
+
         try {
           const detail = await chatsApi.getById(s.id);
-          return mapChatDetailToRecord(detail);
+          const record = mapChatDetailToRecord(detail);
+          this.sessionCache.set(s.id, {
+            updatedAt: s.updated_at,
+            session: record,
+          });
+          return record;
         } catch {
           return {
             id: s.id,
@@ -76,9 +91,15 @@ export class RemoteChatRepository implements ChatRepository {
   async get(chatId: string): Promise<ChatSessionRecord | null> {
     try {
       const detail = await chatsApi.getById(chatId);
-      return mapChatDetailToRecord(detail);
+      const record = mapChatDetailToRecord(detail);
+      this.sessionCache.set(record.id, {
+        updatedAt: record.updatedAt,
+        session: record,
+      });
+      return record;
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
+        this.sessionCache.delete(chatId);
         return null;
       }
       throw err;
@@ -87,7 +108,12 @@ export class RemoteChatRepository implements ChatRepository {
 
   async create(agentId: string, title?: string, id?: string): Promise<ChatSessionRecord> {
     const detail = await chatsApi.create(agentId, title, id);
-    return mapChatDetailToRecord(detail);
+    const record = mapChatDetailToRecord(detail);
+    this.sessionCache.set(record.id, {
+      updatedAt: record.updatedAt,
+      session: record,
+    });
+    return record;
   }
 
   async rename(chatId: string, title: string): Promise<ChatSessionRecord> {
@@ -96,6 +122,10 @@ export class RemoteChatRepository implements ChatRepository {
     if (!updated) {
       throw new Error('Chat session not found after rename');
     }
+    this.sessionCache.set(updated.id, {
+      updatedAt: updated.updatedAt,
+      session: updated,
+    });
     return updated;
   }
 
@@ -129,11 +159,16 @@ export class RemoteChatRepository implements ChatRepository {
     if (!updated) {
       throw new Error('Chat session not found');
     }
+    this.sessionCache.set(updated.id, {
+      updatedAt: updated.updatedAt,
+      session: updated,
+    });
     return updated;
   }
 
   async delete(chatId: string): Promise<void> {
     await chatsApi.delete(chatId);
+    this.sessionCache.delete(chatId);
   }
 }
 

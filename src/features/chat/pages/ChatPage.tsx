@@ -142,6 +142,7 @@ export function ChatPage() {
     renameChatMutation,
     saveMessagesMutation,
     deleteChatMutation,
+    pruneEmptyChatsMutation,
   } = useChatMutations(selectedAgentId);
 
   useEffect(() => {
@@ -224,6 +225,21 @@ export function ChatPage() {
 
   const handleCreateChat = async () => {
     if (!selectedAgentId) return;
+
+    // 1. If currently in an empty chat, avoid creating a redundant empty chat
+    if (activeChat && activeChat.messages.length === 0) {
+      toast.info('Ready to chat', 'You are already in an empty conversation.');
+      return;
+    }
+
+    // 2. If an empty conversation already exists for this agent, switch to it
+    const existingEmpty = (chats ?? []).find((c) => c.messages.length === 0);
+    if (existingEmpty) {
+      setSelectedChatId(existingEmpty.id);
+      toast.info('Empty chat ready', 'Switched to your existing empty conversation.');
+      return;
+    }
+
     const created = await createChatMutation.mutateAsync(undefined);
     setSelectedChatId(created.id);
   };
@@ -514,6 +530,17 @@ export function ChatPage() {
           toast.success('Conversation renamed');
         }}
         onRequestDeleteChat={setDeleteTarget}
+        onPruneEmptyChats={async (emptyIds) => {
+          try {
+            await pruneEmptyChatsMutation.mutateAsync(emptyIds);
+            toast.success(`Cleaned up ${emptyIds.length} empty conversation(s)`);
+          } catch (err) {
+            toast.error(
+              'Failed to clean up empty chats',
+              err instanceof Error ? err.message : String(err)
+            );
+          }
+        }}
       />
 
       {/* Right Conversation Pane */}
@@ -921,8 +948,13 @@ export function ChatPage() {
         isPending={deleteChatMutation.isPending}
         onConfirm={async () => {
           if (!deleteTarget) return;
-          await deleteChatMutation.mutateAsync(deleteTarget.id);
+          const targetId = deleteTarget.id;
+          await deleteChatMutation.mutateAsync(targetId);
           toast.success('Conversation deleted');
+          if (selectedChatId === targetId) {
+            const remaining = (chats ?? []).filter((c) => c.id !== targetId);
+            setSelectedChatId(remaining.length > 0 ? remaining[0].id : null);
+          }
           setDeleteTarget(null);
         }}
         onCancel={() => setDeleteTarget(null)}

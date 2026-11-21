@@ -1,6 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AgentRecord } from '../../../storage/interfaces/AgentRepository';
-import { ChatMessageRecord } from '../../../storage/interfaces/ChatRepository';
+import {
+  ChatMessageRecord,
+  ChatSessionRecord,
+} from '../../../storage/interfaces/ChatRepository';
 import { chatService } from '../services/chat.service';
 
 export function useAgentChatsQuery(agentId: string | null) {
@@ -26,19 +29,25 @@ export function useResolvedAgentToolsQuery(agent: AgentRecord | null) {
 export function useChatMutations(agentId: string | null) {
   const queryClient = useQueryClient();
 
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ['local-chats', agentId] });
-  };
-
   const createChatMutation = useMutation({
     mutationFn: (title?: string) => chatService.createChat(agentId!, title),
-    onSuccess: invalidate,
+    onSuccess: (created) => {
+      queryClient.setQueryData<ChatSessionRecord[]>(
+        ['local-chats', agentId],
+        (old) => [created, ...(old ?? [])]
+      );
+    },
   });
 
   const renameChatMutation = useMutation({
     mutationFn: ({ chatId, title }: { chatId: string; title: string }) =>
       chatService.renameChat(chatId, title),
-    onSuccess: invalidate,
+    onSuccess: (updated) => {
+      queryClient.setQueryData<ChatSessionRecord[]>(
+        ['local-chats', agentId],
+        (old) => (old ?? []).map((c) => (c.id === updated.id ? updated : c))
+      );
+    },
   });
 
   const saveMessagesMutation = useMutation({
@@ -49,12 +58,36 @@ export function useChatMutations(agentId: string | null) {
       chatId: string;
       messages: readonly ChatMessageRecord[];
     }) => chatService.saveMessages(chatId, messages),
-    onSuccess: invalidate,
+    onSuccess: (updated) => {
+      queryClient.setQueryData<ChatSessionRecord[]>(
+        ['local-chats', agentId],
+        (old) => (old ?? []).map((c) => (c.id === updated.id ? updated : c))
+      );
+    },
   });
 
   const deleteChatMutation = useMutation({
     mutationFn: (chatId: string) => chatService.deleteChat(chatId),
-    onSuccess: invalidate,
+    onSuccess: (_data, deletedChatId) => {
+      queryClient.setQueryData<ChatSessionRecord[]>(
+        ['local-chats', agentId],
+        (old) => (old ?? []).filter((c) => c.id !== deletedChatId)
+      );
+    },
+  });
+
+  const pruneEmptyChatsMutation = useMutation({
+    mutationFn: async (chatIds: readonly string[]) => {
+      await Promise.all(chatIds.map((id) => chatService.deleteChat(id)));
+      return chatIds;
+    },
+    onSuccess: (prunedChatIds) => {
+      const prunedSet = new Set(prunedChatIds);
+      queryClient.setQueryData<ChatSessionRecord[]>(
+        ['local-chats', agentId],
+        (old) => (old ?? []).filter((c) => !prunedSet.has(c.id))
+      );
+    },
   });
 
   return {
@@ -62,5 +95,6 @@ export function useChatMutations(agentId: string | null) {
     renameChatMutation,
     saveMessagesMutation,
     deleteChatMutation,
+    pruneEmptyChatsMutation,
   };
 }
